@@ -1,8 +1,8 @@
 "use client";
 import { API_BASE } from '@/lib/api';
 import dynamic from 'next/dynamic';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 // import Map from './map';
 
 // disabilityData and statusData will be computed dynamically from backend data
@@ -59,6 +59,7 @@ const ipkData = [
 
 const COLORS_DISABILITY = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF'];
 const COLORS_STATUS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7f50', '#a4de6c'];
+const JENIS_ASAL_SEKOLAH_OPTIONS = ['Homeschooling', 'NonSLB', 'Paket C', 'Sarjana', 'SLB'];
 
 type StudentRecord = {
   id?: number;
@@ -91,6 +92,176 @@ export default function StatistikMahasiswaPage() {
   const [selectedJenisKelamin, setSelectedJenisKelamin] = useState('all');
   const [selectedJenisAsalSekolah, setSelectedJenisAsalSekolah] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [angkatanPage, setAngkatanPage] = useState(0);
+  const [focusedFilterId, setFocusedFilterId] = useState<string | null>(null);
+  const [showShortcutsGuide, setShowShortcutsGuide] = useState(false);
+  const [liveAnnouncement, setLiveAnnouncement] = useState('');
+  const lastHelpAnnouncementRef = useRef(0);
+  const lastEscPressRef = useRef(0);
+  const lastCtrlPressRef = useRef(0);
+  const lastShiftPressRef = useRef(0);
+  const isPausedRef = useRef(false);
+  const isTtsActiveRef = useRef(false);
+  
+  // Helper function for keyboard accessibility
+  const handleKeyboardClick = useCallback((e: React.KeyboardEvent, callback: () => void) => {
+    if (e.key === 'f' || e.key === 'F' || e.key === ' ') {
+      e.preventDefault();
+      callback();
+    }
+  }, []);
+  
+  const announceNavigationHelp = useCallback(() => {
+    const now = Date.now();
+    if (now - lastHelpAnnouncementRef.current < 1200) return;
+    lastHelpAnnouncementRef.current = now;
+    const helpText = "Halaman Statistik Mahasiswa Disabilitas. Jika ingin langsung mengetahui jumlah mahasiswa disabilitas tanpa memilih filter, tekan Control dua kali. Tekan Tab untuk berpindah ke filter, lalu gunakan panah bawah atau atas untuk memilih opsi. Tekan F5 untuk membaca ulang panduan awal ini. Tekan escape dua kali untuk mendengar panduan shortcut filter. Tekan shift dua kali untuk mendengar panduan shortcut aksesibilitas.";
+    window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: helpText } }));
+  }, []);
+
+  const announceShortcutsSummary = useCallback(() => {
+    const shortcutsText = `Panduan Shortcut Filter. Shortcut Filter: Tekan antara Control 1 sampai Control 0 untuk pindah ke bagian filter atau Tekan Tab untuk pindah ke filter sebelah. Tekan Control dua kali untuk konfirmasi filter dan baca total mahasiswa. Control Z untuk reset semua filter. Shortcut Peta dan Statistik: Control A untuk baca asal provinsi mahasiswa. Control S untuk statistik angkatan. Control D untuk statistik fakultas. Control F untuk statistik disabilitas. Control G untuk statistik status. Control H untuk statistik jenis kelamin. Control J untuk statistik jenjang. Control K untuk statistik jenis asal sekolah. Control L untuk statistik IPK. Shortcut Kontrol TTS: Tekan Spasi untuk pause, lalu tekan Spasi lagi untuk melanjutkan pembacaan TTS. Tekan escape dua kali untuk membaca ulang panduan ini. Tekan shift dua kali untuk mendengar panduan shortcut aksesibilitas.`;
+    window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: shortcutsText } }));
+  }, []);
+
+  const resetAllFilters = useCallback(() => {
+    setSelectedFaculty('all');
+    setSelectedDisability('all');
+    setSelectedIpk('all');
+    setSelectedProvinsi('all');
+    setSelectedAngkatan('all');
+    setSelectedJalurMasuk('all');
+    setSelectedJenjang('all');
+    setSelectedJenisKelamin('all');
+    setSelectedJenisAsalSekolah('all');
+    setSelectedStatus('all');
+    
+    // Focus on the first filter (Fakultas) after reset
+    setTimeout(() => {
+      const facultyFilter = document.querySelector('[aria-label*="Fakultas"]') as HTMLSelectElement;
+      if (facultyFilter) {
+        facultyFilter.focus();
+        window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Semua filter dan fitur aksesibilitas telah direset. Filter Fakultas dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+      } else {
+        window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Semua filter dan fitur aksesibilitas telah direset.' } }));
+      }
+    }, 0);
+  }, []);
+
+  // Trigger navigation help only on initial page load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      announceNavigationHelp();
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [announceNavigationHelp]);
+
+  useEffect(() => {
+    const handleLiveAnnouncement = (evt: Event) => {
+      const event = evt as CustomEvent<{ text?: string }>;
+      const text = (event.detail?.text || '').trim();
+      if (!text) return;
+      setLiveAnnouncement((prev) => (prev === text ? `${text}\u00A0` : text));
+    };
+
+    window.addEventListener('tts-say', handleLiveAnnouncement as EventListener);
+    return () => window.removeEventListener('tts-say', handleLiveAnnouncement as EventListener);
+  }, []);
+  
+  // Get filter label by ID
+  const getFilterLabel = useCallback((filterId: string): string => {
+    const filterMap: Record<string, string> = {
+      'faculty-filter': 'Fakultas',
+      'disability-filter': 'Ragam Disabilitas',
+      'ipk-filter': 'IPK',
+      'provinsi-filter': 'Provinsi',
+      'angkatan-filter': 'Angkatan',
+      'jalurMasuk-filter': 'Jalur Masuk',
+      'jenjang-filter': 'Jenjang',
+      'jenisKelamin-filter': 'Jenis Kelamin',
+      'jenisAsalSekolah-filter': 'Jenis Asal Sekolah',
+      'status-filter': 'Status',
+    };
+    return filterMap[filterId] || filterId;
+  }, []);
+  
+  // List of filter IDs in order
+  const FILTER_ORDER = [
+    'faculty-filter',
+    'disability-filter',
+    'ipk-filter',
+    'provinsi-filter',
+    'angkatan-filter',
+    'jalurMasuk-filter',
+    'jenjang-filter',
+    'jenisKelamin-filter',
+    'jenisAsalSekolah-filter',
+    'status-filter'
+  ];
+  
+  // Get filter position (first=0, last=9)
+  const getFilterPosition = useCallback((filterId: string): number => {
+    return FILTER_ORDER.indexOf(filterId);
+  }, []);
+  
+  // Placeholder for readMapDistribution - will be replaced with readMapDistributionEnhanced
+  const readMapDistribution = useCallback(() => {
+    // This will be overridden after filteredData is computed
+    window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Loading...' } }));
+  }, []);
+  
+  // Handle select change with TTS for option announcement
+  const handleFilterKeyDown = useCallback((e: React.KeyboardEvent<HTMLSelectElement>, filterId: string) => {
+    const select = e.currentTarget as HTMLSelectElement;
+    const filterLabel = getFilterLabel(filterId);
+    
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      // Small timeout to let the browser update the selected option first
+      setTimeout(() => {
+        const currentOption = select.options[select.selectedIndex];
+        const optionText = currentOption?.textContent || 'Tidak diketahui';
+        const arrowType = e.key === 'ArrowDown' ? 'bawah' : 'atas';
+        const announcementText = `${filterLabel}: ${optionText}`;
+        window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: announcementText } }));
+      }, 50);
+    } else if (e.key === 'Enter') {
+      const confirmText = `Gunakan Control dua kali untuk konfirmasi filter dan baca total mahasiswa.`;
+      window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: confirmText } }));
+    }
+  }, [getFilterLabel]);
+
+  const formatKeyForTTS = useCallback((e: KeyboardEvent): string => {
+    const keyMap: Record<string, string> = {
+      ' ': 'spasi',
+      'Enter': 'enter',
+      'Tab': 'tab',
+      'Backspace': 'backspace',
+      'Delete': 'delete',
+      'Escape': 'escape',
+      'ArrowUp': 'panah atas',
+      'ArrowDown': 'panah bawah',
+      'ArrowLeft': 'panah kiri',
+      'ArrowRight': 'panah kanan',
+      'Home': 'home',
+      'End': 'end',
+      'PageUp': 'page up',
+      'PageDown': 'page down',
+    };
+
+    const base = keyMap[e.key] || (e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase());
+    const parts: string[] = [];
+    if (e.ctrlKey) parts.push('control');
+    if (e.altKey) parts.push('alt');
+    if (e.shiftKey && e.key !== 'Shift') parts.push('shift');
+    if (e.metaKey) parts.push('meta');
+    parts.push(base);
+
+    return parts.join(' ');
+  }, []);
+  
   const normalizeStatus = useCallback((s?: string) => (s ?? '').trim().toLowerCase(), []);
   const prettyStatus = useCallback((s?: string) => {
     const t = normalizeStatus(s);
@@ -103,6 +274,27 @@ export default function StatistikMahasiswaPage() {
       default: return (s ?? '').trim();
     }
   }, [normalizeStatus]);
+
+  // Handle select focus with TTS guidance
+  const handleFilterFocus = useCallback((filterId: string, currentValue: string) => {
+    setFocusedFilterId(filterId);
+    const filterLabel = getFilterLabel(filterId);
+    const readableValue = currentValue === 'all' ? `Semua ${filterLabel}` : currentValue;
+    const position = getFilterPosition(filterId);
+    const isFirstFilter = position === 0;
+    const isLastFilter = position === FILTER_ORDER.length - 1;
+    
+    let focusText = `filter ${filterLabel}. Nilai saat ini: ${readableValue}. Tekan panah bawah atau atas untuk memilih opsi lainnya.`;
+    
+    // Add navigation hint for non-first filters
+    if (!isFirstFilter) {
+      focusText += ` Tekan Shift Tab untuk ke filter sebelumnya.`;
+    }
+    
+    window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: focusText } }));
+  }, [getFilterLabel, getFilterPosition]);
+
+  // NOTE: handleFilterFocus will be overridden after filteredData is computed
 
   useEffect(() => {
     const fetchData = async () => {
@@ -164,9 +356,10 @@ export default function StatistikMahasiswaPage() {
   }, [rawData]);
 
   const jenisAsalSekolahOptions = useMemo(() => {
-    const set = new Set<string>();
-    rawData.forEach((d) => { if (d.asal_sekolah) set.add(d.asal_sekolah); });
-    return [{ value: 'all', label: 'Semua Jenis Asal Sekolah' }, ...Array.from(set).sort().map(v => ({ value: v, label: v }))];
+    return [
+      { value: 'all', label: 'Semua Jenis Asal Sekolah' },
+      ...JENIS_ASAL_SEKOLAH_OPTIONS.map(v => ({ value: v, label: v }))
+    ];
   }, [rawData]);
 
   const disabilityOptions = useMemo(() => {
@@ -201,8 +394,29 @@ export default function StatistikMahasiswaPage() {
     return v >= 3.5 ? '\u2265 3.5' : v >= 3.0 ? '3.0 - 3.49' : v >= 2.5 ? '2.5 - 2.99' : '< 2.5';
   };
 
+  const normalizeAsalSekolah = useCallback((value?: string) => {
+    const v = (value ?? '').trim().toLowerCase();
+    if (!v) return null;
+    const map: Record<string, string> = {
+      'homeschooling': 'Homeschooling',
+      'home schooling': 'Homeschooling',
+      'home-schooling': 'Homeschooling',
+      'nonslb': 'NonSLB',
+      'non slb': 'NonSLB',
+      'non-slb': 'NonSLB',
+      'paket c': 'Paket C',
+      'paketc': 'Paket C',
+      'paket-c': 'Paket C',
+      'sarjana': 'Sarjana',
+      'slb': 'SLB',
+    };
+    return map[v] ?? null;
+  }, []);
+
   const filteredData: StudentRecord[] = rawData.filter((student: StudentRecord) => {
     const ipkCode = computeIpkCategoryCode(student.ipk);
+    const asalSekolah = normalizeAsalSekolah(student.asal_sekolah);
+    const selectedAsalSekolah = normalizeAsalSekolah(selectedJenisAsalSekolah) ?? selectedJenisAsalSekolah;
     return (selectedFaculty === 'all' || student.fakultas === selectedFaculty) &&
             (selectedDisability === 'all' || student.jenisDisabilitas === selectedDisability) &&
             (selectedIpk === 'all' || (ipkCode !== null && ipkCode === selectedIpk)) &&
@@ -211,11 +425,403 @@ export default function StatistikMahasiswaPage() {
             (selectedJalurMasuk === 'all' || student.jalur_masuk === selectedJalurMasuk) &&
             (selectedJenjang === 'all' || student.jenjang === selectedJenjang) &&
             (selectedJenisKelamin === 'all' || student.gender === selectedJenisKelamin) &&
-            (selectedJenisAsalSekolah === 'all' || student.asal_sekolah === selectedJenisAsalSekolah) &&
+            (selectedJenisAsalSekolah === 'all' || (asalSekolah !== null && asalSekolah === selectedAsalSekolah)) &&
             (selectedStatus === 'all' || normalizeStatus(student.status) === selectedStatus);
   });
 
   const totalDisabledStudents = filteredData.length;
+
+  // Build active filters description for TTS
+  const getActiveFiltersDescription = (): string => {
+    const activeFilters: string[] = [];
+    if (selectedFaculty !== 'all') activeFilters.push(`Fakultas: ${selectedFaculty}`);
+    if (selectedDisability !== 'all') activeFilters.push(`Ragam Disabilitas: ${selectedDisability}`);
+    if (selectedIpk !== 'all') {
+      const ipkMap: Record<string, string> = { '4': '≥ 3.5', '3': '3.0 - 3.49', '2': '2.5 - 2.99', '1': '< 2.5' };
+      activeFilters.push(`IPK: ${ipkMap[selectedIpk] || selectedIpk}`);
+    }
+    if (selectedProvinsi !== 'all') activeFilters.push(`Provinsi: ${selectedProvinsi}`);
+    if (selectedAngkatan !== 'all') activeFilters.push(`Angkatan: ${selectedAngkatan}`);
+    if (selectedJalurMasuk !== 'all') activeFilters.push(`Jalur Masuk: ${selectedJalurMasuk}`);
+    if (selectedJenjang !== 'all') activeFilters.push(`Jenjang: ${selectedJenjang}`);
+    if (selectedJenisKelamin !== 'all') {
+      const genderMap: Record<string, string> = { 'L': 'Laki-laki', 'P': 'Perempuan' };
+      activeFilters.push(`Jenis Kelamin: ${genderMap[selectedJenisKelamin] || selectedJenisKelamin}`);
+    }
+    if (selectedJenisAsalSekolah !== 'all') activeFilters.push(`Asal Sekolah: ${selectedJenisAsalSekolah}`);
+    if (selectedStatus !== 'all') activeFilters.push(`Status: ${prettyStatus(selectedStatus)}`);
+    
+    return activeFilters.length > 0 ? activeFilters.join(', ') : 'tidak ada filter';
+  };
+
+  useEffect(() => {
+    const handleFilterConfirm = (evt: Event) => {
+      const event = evt as CustomEvent<{ filterLabel?: string; optionText?: string }>;
+      const filterLabel = event.detail?.filterLabel || 'filter';
+      const optionText = event.detail?.optionText || 'Tidak diketahui';
+      const activeFiltersDesc = getActiveFiltersDescription();
+      const confirmationText = `Konfirmasi ${filterLabel}: ${optionText}. Jumlah mahasiswa disabilitas dengan ${activeFiltersDesc} adalah ${totalDisabledStudents} mahasiswa.`;
+      window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: confirmationText } }));
+    };
+
+    window.addEventListener('filter-confirm', handleFilterConfirm as EventListener);
+    return () => window.removeEventListener('filter-confirm', handleFilterConfirm as EventListener);
+  }, [getActiveFiltersDescription, totalDisabledStudents]);
+
+  // Create an updated version of handleFilterFocus that works with filteredData
+  // Note: This uses a mutable ref-based approach to update the handler after filteredData is computed
+  const handleFilterFocusImpl = useCallback((filterId: string, currentValue: string) => {
+    setFocusedFilterId(filterId);
+    const filterLabel = getFilterLabel(filterId);
+    const readableValue = currentValue === 'all' ? `Semua ${filterLabel}` : currentValue;
+    const position = getFilterPosition(filterId);
+    const isFirstFilter = position === 0;
+    const isLastFilter = position === FILTER_ORDER.length - 1;
+    
+    let focusText = `Anda berada di filter ${filterLabel}. Nilai saat ini: ${readableValue}. Tekan panah bawah atau atas untuk memilih opsi lainnya.`;
+    
+    // Add navigation hints for non-first filters
+    if (!isFirstFilter) {
+      focusText += ` Tekan Shift Tab untuk ke filter sebelumnya.`;
+    }
+    
+    // Add comprehensive info for last filter
+    if (isLastFilter) {
+      const activeFiltersDesc = getActiveFiltersDescription();
+      focusText += ` Jumlah mahasiswa disabilitas dengan filter ${activeFiltersDesc} adalah ${filteredData.length} mahasiswa.`;
+      focusText += ` Tekan Control A untuk membaca peta sebaran.`;
+      focusText += ` Tekan Control S, D, F, G, H, atau J untuk membaca statistik.`;
+    }
+    
+    window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: focusText } }));
+  }, [getFilterLabel, getFilterPosition, getActiveFiltersDescription, filteredData]);
+
+  // Function to read map distribution based on current filters
+  const readMapDistributionEnhanced = useCallback(() => {
+    // Build map of provinces with student counts from filtered data
+    const provinceMap = new Map<string, number>();
+    
+    filteredData.forEach((student: StudentRecord) => {
+      const prov = student.provinsi || 'Tidak diketahui';
+      provinceMap.set(prov, (provinceMap.get(prov) || 0) + 1);
+    });
+    
+    if (provinceMap.size === 0) {
+      window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Tidak ada mahasiswa dengan filter yang dipilih saat ini.' } }));
+      return;
+    }
+    
+    // Build readable province list - sorted by count descending
+    const provinceList: string[] = [];
+    const sortedProvinces = Array.from(provinceMap.entries())
+      .sort((a, b) => b[1] - a[1]); // Sort by count descending
+    
+    sortedProvinces.forEach(([province, count]) => {
+      const countText = count === 1 ? '1 mahasiswa' : `${count} mahasiswa`;
+      provinceList.push(`Provinsi ${province}: ${countText}`);
+    });
+    
+    const mapText = `Peta sebaran mahasiswa disabilitas. ${provinceList.join('. ')}. Selesai.`;
+    window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: mapText } }));
+  }, [filteredData]);
+
+  // Reset pause state when new TTS starts and track TTS lifecycle
+  useEffect(() => {
+    const handleTtsSay = (e: Event) => {
+      isPausedRef.current = false;
+      isTtsActiveRef.current = true;
+    };
+    
+    // Hook into speechSynthesis to track when TTS ends
+    const originalSpeak = window.speechSynthesis.speak;
+    window.speechSynthesis.speak = function(utterance: any) {
+      // Save original handlers before overwriting
+      const originalOnEnd = utterance.onend;
+      const originalOnCancel = utterance.oncancel;
+      
+      utterance.onend = function() {
+        isPausedRef.current = false;
+        isTtsActiveRef.current = false;
+        if (originalOnEnd) originalOnEnd.call(utterance);
+      };
+      utterance.oncancel = function() {
+        isPausedRef.current = false;
+        isTtsActiveRef.current = false;
+        if (originalOnCancel) originalOnCancel.call(utterance);
+      };
+      return originalSpeak.call(window.speechSynthesis, utterance);
+    };
+    
+    window.addEventListener('tts-say', handleTtsSay);
+    return () => window.removeEventListener('tts-say', handleTtsSay);
+  }, []);
+
+  // Keyboard shortcuts for filters and statistics reading
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // F5 to replay initial navigation help (without refreshing page)
+      if (e.key === 'F5') {
+        e.preventDefault();
+        announceNavigationHelp();
+        return;
+      }
+
+      // Double Shift to announce full accessibility shortcuts summary
+      if (e.key === 'Shift' && !e.repeat) {
+        const now = Date.now();
+        const timeSinceLastShift = now - lastShiftPressRef.current;
+        
+        if (timeSinceLastShift < 500) {
+          // Double Shift detected
+          e.preventDefault();
+          lastShiftPressRef.current = 0; // Reset
+          announceShortcutsSummary();
+          return;
+        } else {
+          // First Shift press
+          lastShiftPressRef.current = now;
+          return;
+        }
+      }
+
+      // Double ESC to announce shortcut summary
+      if (e.key === 'Escape') {
+        const now = Date.now();
+        const timeSinceLastEsc = now - lastEscPressRef.current;
+        
+        if (timeSinceLastEsc < 500) {
+          // Double ESC detected
+          e.preventDefault();
+          lastEscPressRef.current = 0; // Reset
+          announceShortcutsSummary();
+          return;
+        } else {
+          // First ESC press
+          lastEscPressRef.current = now;
+          // Let normal key echo happen below
+        }
+      }
+
+      // Double Ctrl to announce total with current filters
+      if (e.key === 'Control') {
+        const now = Date.now();
+        const timeSinceLastCtrl = now - lastCtrlPressRef.current;
+        
+        if (timeSinceLastCtrl < 500) {
+          // Double Ctrl detected
+          e.preventDefault();
+          lastCtrlPressRef.current = 0; // Reset
+          const activeFiltersDesc = getActiveFiltersDescription();
+          const quickTotalText = `Jumlah mahasiswa disabilitas saat ini dengan filter ${activeFiltersDesc} adalah ${totalDisabledStudents} mahasiswa.`;
+          window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: quickTotalText } }));
+          return;
+        } else {
+          // First Ctrl press
+          lastCtrlPressRef.current = now;
+          return; // Don't process further or announce key echo for single Ctrl
+        }
+      }
+
+      let handledByShortcut = false;
+
+      // Ctrl+Z to reset all filters and accessibility features
+      if (e.ctrlKey && !e.altKey && !e.metaKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        handledByShortcut = true;
+        resetAllFilters();
+        // Also reset accessibility features
+        window.dispatchEvent(new CustomEvent('a11y-reset'));
+        return;
+      }
+
+      // Filter shortcuts: Ctrl+1 through Ctrl+0
+      if (e.ctrlKey && !e.altKey && !e.metaKey) {
+        const key = e.key;
+        const keyLower = key.toLowerCase();
+
+        // Check for chart shortcuts (K for Asal Sekolah, L for IPK)
+        if ((keyLower === 'k' || keyLower === 'l') && !e.shiftKey) {
+          e.preventDefault();
+          handledByShortcut = true;
+          const chartMap: Record<string, { id: string; name: string }> = {
+            k: { id: 'asal-sekolah-chart', name: 'Jenis Asal Sekolah' },
+            l: { id: 'ipk-chart', name: 'IPK' },
+          };
+          const chartShortcut = chartMap[keyLower];
+          if (chartShortcut) {
+            const element = document.getElementById(chartShortcut.id);
+            if (element) {
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: `Membaca statistik ${chartShortcut.name}...` } }));
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              element.focus();
+              setTimeout(() => {
+                element.focus();
+                const clickEvent = new MouseEvent('click', {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window
+                });
+                element.dispatchEvent(clickEvent);
+              }, 300);
+            }
+          }
+          return;
+        }
+        
+        // Check if it's a number key for filter shortcuts
+        const isNumber = /^[0-9]$/.test(key);
+        
+        if (isNumber && !e.shiftKey) {
+          e.preventDefault();
+          handledByShortcut = true;
+          const numKey = parseInt(key, 10);
+          const filterMap: Record<number, () => void> = {
+            1: () => {
+              (document.querySelector('[aria-label*="Fakultas"]') as HTMLSelectElement)?.focus();
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Filter Fakultas dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+            },
+            2: () => {
+              (document.querySelector('[aria-label*="Ragam Disabilitas"]') as HTMLSelectElement)?.focus();
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Filter Ragam Disabilitas dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+            },
+            3: () => {
+              (document.querySelector('[aria-label*="IPK"]') as HTMLSelectElement)?.focus();
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Filter IPK dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+            },
+            4: () => {
+              (document.querySelector('[aria-label*="Provinsi"]') as HTMLSelectElement)?.focus();
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Filter Provinsi dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+            },
+            5: () => {
+              (document.querySelector('[aria-label*="Angkatan"]') as HTMLSelectElement)?.focus();
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Filter Angkatan dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+            },
+            6: () => {
+              (document.querySelector('[aria-label*="Jalur Masuk"]') as HTMLSelectElement)?.focus();
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Filter Jalur Masuk dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+            },
+            7: () => {
+              (document.querySelector('[aria-label*="Jenjang"]') as HTMLSelectElement)?.focus();
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Filter Jenjang dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+            },
+            8: () => {
+              (document.querySelector('[aria-label*="Jenis Kelamin"]') as HTMLSelectElement)?.focus();
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Filter Jenis Kelamin dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+            },
+            9: () => {
+              (document.querySelector('[aria-label*="Jenis Asal Sekolah"]') as HTMLSelectElement)?.focus();
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Filter Jenis Asal Sekolah dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+            },
+            0: () => {
+              (document.querySelector('[aria-label*="Status"]') as HTMLSelectElement)?.focus();
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Filter Status dipilih. Tekan panah bawah untuk memilih opsi lain.' } }));
+            },
+          };
+          
+          if (numKey in filterMap) {
+            filterMap[numKey]();
+          }
+        } else if ((e.key === 'a' || e.key === 'A') && !e.shiftKey) {
+          e.preventDefault();
+          handledByShortcut = true;
+          window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Membaca peta sebaran mahasiswa disabilitas...' } }));
+          setTimeout(() => {
+            readMapDistributionEnhanced();
+          }, 100);
+          return;
+        } else {
+          const chartShortcutMap: Record<string, { id: string; name: string }> = {
+            s: { id: 'angkatan-chart', name: 'Angkatan' },
+            d: { id: 'fakultas-chart', name: 'Fakultas' },
+            f: { id: 'disabilitas-chart', name: 'Disabilitas' },
+            g: { id: 'status-chart', name: 'Status' },
+            h: { id: 'jenis-kelamin-chart', name: 'Jenis Kelamin' },
+            j: { id: 'jenjang-chart', name: 'Jenjang' },
+          };
+
+          const chartShortcut = chartShortcutMap[keyLower];
+          if (chartShortcut && !e.shiftKey) {
+            e.preventDefault();
+            handledByShortcut = true;
+            const element = document.getElementById(chartShortcut.id);
+            if (element) {
+              window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: `Membaca statistik ${chartShortcut.name}...` } }));
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              // Focus immediately, then trigger click after
+              element.focus();
+              setTimeout(() => {
+                element.focus(); // Ensure focus is retained
+                const clickEvent = new MouseEvent('click', {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window
+                });
+                element.dispatchEvent(clickEvent);
+              }, 300);
+            }
+            return;
+          }
+        }
+      }
+
+      // Space to pause/resume TTS
+      if (e.key === ' ' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
+        const target = e.target as HTMLElement | null;
+        const targetTag = target?.tagName;
+        // Don't intercept space in input fields
+        if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || target?.isContentEditable) {
+          return;
+        }
+        
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window && isTtsActiveRef.current) {
+          e.preventDefault();
+          handledByShortcut = true;
+          
+          if (isPausedRef.current) {
+            // Resume paused audio
+            try {
+              window.speechSynthesis.resume();
+            } catch (err) {
+              console.error('Resume failed:', err);
+            }
+            isPausedRef.current = false;
+          } else {
+            // Pause playing audio
+            try {
+              window.speechSynthesis.pause();
+            } catch (err) {
+              console.error('Pause failed:', err);
+            }
+            isPausedRef.current = true;
+          }
+          return;
+        }
+      }
+
+      if (handledByShortcut) return;
+
+      if (e.repeat) return;
+      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
+
+      const target = e.target as HTMLElement | null;
+      const targetTag = target?.tagName;
+      if (targetTag === 'SELECT' && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter')) {
+        return;
+      }
+      
+      // Don't announce 'Enter' or 'F' if it's being handled by a chart element's onKeyDown
+      const chartElement = target?.closest('div[role="button"][id*="chart"]');
+      if (chartElement && (e.key === 'Enter' || e.key === 'f' || e.key === 'F')) {
+        return;
+      }
+
+      const pressedKeyText = formatKeyForTTS(e);
+      window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: `${pressedKeyText}` } }));
+    };
+    
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [readMapDistributionEnhanced, getActiveFiltersDescription, totalDisabledStudents, formatKeyForTTS, announceNavigationHelp, announceShortcutsSummary, resetAllFilters]);
 
   // Data for Line Chart (Jumlah Mahasiswa Disabilitas per Angkatan)
   const studentsPerAngkatan = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
@@ -228,16 +834,33 @@ export default function StatistikMahasiswaPage() {
     jumlah: studentsPerAngkatan[angkatan],
   }));
 
+  // Helper function to format asal sekolah name for TTS reading
+  const formatAsalSekolahForTts = (name: string): string => {
+    if (name === 'NonSLB') return 'Non S L B';
+    if (name === 'SLB') return 'S L B';
+    return name;
+  };
+
+  // Helper function to format IPK range for TTS reading
+  const formatIpkForTts = (name: string): string => {
+    if (name === '\u2265 3.5' || name === '≥ 3.5') return 'lebih dari sama dengan tiga koma lima';
+    return name;
+  };
+
   // Data for Jenis Asal Sekolah Pie Chart
   const studentsPerAsalSekolah = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
-    const asal = student.asal_sekolah ?? 'Tidak Diketahui';
+    const asal = normalizeAsalSekolah(student.asal_sekolah);
+    if (!asal) return acc;
     acc[asal] = (acc[asal] || 0) + 1;
     return acc;
   }, {});
-  const asalSekolahChartData = Object.keys(studentsPerAsalSekolah).map(asalSekolah => ({
-    name: asalSekolah,
-    value: studentsPerAsalSekolah[asalSekolah],
-  }));
+  const asalSekolahChartData = JENIS_ASAL_SEKOLAH_OPTIONS
+    .map(asalSekolah => ({
+      name: asalSekolah,
+      value: studentsPerAsalSekolah[asalSekolah] || 0,
+      label: `${asalSekolah}: ${studentsPerAsalSekolah[asalSekolah] || 0}`,
+    }))
+    .filter(item => item.value > 0); // Only show items with value > 0
 
   // Data for Bar Chart (Jumlah Mahasiswa Disabilitas per Fakultas)
   const studentsPerFakultas = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
@@ -259,6 +882,7 @@ export default function StatistikMahasiswaPage() {
   const jenisKelaminChartData = Object.keys(studentsPerJenisKelamin).map(gender => ({
     name: gender === 'L' ? 'Laki-laki' : gender === 'P' ? 'Perempuan' : gender,
     value: studentsPerJenisKelamin[gender],
+    label: `${gender === 'L' ? 'Laki-laki' : gender === 'P' ? 'Perempuan' : gender}: ${studentsPerJenisKelamin[gender]}`,
   }));
 
   // Data for Jenjang Studi Pie Chart
@@ -270,6 +894,7 @@ export default function StatistikMahasiswaPage() {
   const jenjangChartData = Object.keys(studentsPerJenjang).map(jenjang => ({
     name: jenjang,
     value: studentsPerJenjang[jenjang],
+    label: `${jenjang}: ${studentsPerJenjang[jenjang]}`,
   }));
     // Data for IPK Distribution Pie Chart
     const studentsPerIpkCategory = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
@@ -281,6 +906,7 @@ export default function StatistikMahasiswaPage() {
     const ipkDistributionChartData = Object.keys(studentsPerIpkCategory).map(category => ({
       name: category,
       value: studentsPerIpkCategory[category],
+      label: `${category}: ${studentsPerIpkCategory[category]}`,
     }));
     // Build chart datasets for disability and status
     const studentsPerDisability = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
@@ -288,14 +914,86 @@ export default function StatistikMahasiswaPage() {
       acc[d] = (acc[d] || 0) + 1;
       return acc;
     }, {});
-    const disabilityChartData = Object.keys(studentsPerDisability).map(name => ({ name, value: studentsPerDisability[name] }));
+    const disabilityChartData = Object.keys(studentsPerDisability).map(name => ({
+      name,
+      value: studentsPerDisability[name],
+      label: `${name}: ${studentsPerDisability[name]}`,
+    }));
 
     const studentsPerStatus = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
       const s = normalizeStatus(student.status);
       acc[s] = (acc[s] || 0) + 1;
       return acc;
     }, {});
-    const statusChartData = Object.keys(studentsPerStatus).map(code => ({ name: prettyStatus(code), value: studentsPerStatus[code] }));
+    const statusChartData = Object.keys(studentsPerStatus).map(code => ({
+      name: prettyStatus(code),
+      value: studentsPerStatus[code],
+      label: `${prettyStatus(code)}: ${studentsPerStatus[code]}`,
+    }));
+
+    const buildTtsAllMessage = (
+      data: { name: string; value: number }[],
+      formatter: (item: { name: string; value: number }) => string
+    ) => data.map(formatter).join(', ');
+
+    // Helper: Convert number to Indonesian text (e.g., 2018 → "dua ribu delapan belas")
+    const numberToIndonesian = (num: number): string => {
+      const ones = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan'];
+      const teens = ['sepuluh', 'sebelas', 'dua belas', 'tiga belas', 'empat belas', 'lima belas', 'enam belas', 'tujuh belas', 'delapan belas', 'sembilan belas'];
+      const tens = ['', '', 'dua puluh', 'tiga puluh', 'empat puluh', 'lima puluh', 'enam puluh', 'tujuh puluh', 'delapan puluh', 'sembilan puluh'];
+      
+      if (num === 0) return 'nol';
+      if (num < 0) return 'minus ' + numberToIndonesian(-num);
+      
+      if (num < 10) return ones[num];
+      if (num < 20) return teens[num - 10];
+      if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '');
+      if (num < 1000) return ones[Math.floor(num / 100)] + ' ratus ' + (num % 100 ? numberToIndonesian(num % 100) : '').trim();
+      if (num < 1000000) return (num < 2000 ? 'seribu' : numberToIndonesian(Math.floor(num / 1000)) + ' ribu') + (num % 1000 ? ' ' + numberToIndonesian(num % 1000) : '').trim();
+      return num.toString();
+    };
+
+    // Build TTS message for angkatan chart
+    const angkatanTtsMessage = angkatanChartData.map(item => 
+      `Ada ${item.jumlah} mahasiswa disabilitas angkatan ${numberToIndonesian(Number(item.angkatan))}`
+    ).join(', ');
+
+    // Pagination for angkatan chart (10 items per page)
+    const ITEMS_PER_PAGE = 10;
+    const totalPages = Math.ceil(angkatanChartData.length / ITEMS_PER_PAGE);
+    const startIndex = angkatanPage * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedAngkatanData = angkatanChartData.slice(startIndex, endIndex);
+
+    // Build TTS message for fakultas chart
+    const fakultasTtsMessage = fakultasChartData.map(item => 
+      `Ada ${item.jumlah} mahasiswa disabilitas di fakultas ${item.fakultas}`
+    ).join(', ');
+
+    const disabilityTtsMessage = buildTtsAllMessage(
+      disabilityChartData,
+      (item) => `Terdapat ${item.value} mahasiswa yang memiliki ragam disabilitas ${item.name}`
+    );
+    const statusTtsMessage = buildTtsAllMessage(
+      statusChartData,
+      (item) => `Terdapat ${item.value} mahasiswa dengan status ${item.name}`
+    );
+    const jenisKelaminTtsMessage = buildTtsAllMessage(
+      jenisKelaminChartData,
+      (item) => `Terdapat ${item.value} mahasiswa berjenis kelamin ${item.name}`
+    );
+    const jenjangTtsMessage = buildTtsAllMessage(
+      jenjangChartData,
+      (item) => `Terdapat ${item.value} mahasiswa pada jenjang ${item.name}`
+    );
+    const asalSekolahTtsMessage = buildTtsAllMessage(
+      asalSekolahChartData,
+      (item) => `Terdapat ${item.value} mahasiswa dari asal sekolah ${formatAsalSekolahForTts(item.name)}`
+    );
+    const ipkTtsMessage = buildTtsAllMessage(
+      ipkDistributionChartData,
+      (item) => `Terdapat ${item.value} mahasiswa dengan IPK ${formatIpkForTts(item.name)}`
+    );
 
     // Map data for MapChart (provide required fields with placeholders where needed)
     const mapData = filteredData.map((m: any) => ({
@@ -314,9 +1012,12 @@ export default function StatistikMahasiswaPage() {
       jenisAsalSekolah: m.asal_sekolah || '',
       ipk: m.ipk || 0,
     }));
+    const mapTtsSummary = mapData.length > 0
+      ? `Peta sebaran mahasiswa disabilitas. Total ${mapData.length} mahasiswa pada peta. Tekan Control A untuk membaca ringkasan sebaran per provinsi.`
+      : 'Peta sebaran mahasiswa disabilitas belum memiliki data untuk filter saat ini.';
 
     return (
-      <section className="relative min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+      <main role="main" aria-labelledby="statistik-page-title" className="relative min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-20 left-10 w-40 h-40 bg-green-400/10 rounded-full blur-3xl"></div>
           <div className="absolute bottom-20 right-20 w-60 h-60 bg-lime-400/10 rounded-full blur-3xl"></div>
@@ -324,13 +1025,93 @@ export default function StatistikMahasiswaPage() {
         </div>
         <div className="relative z-10 max-w-7xl mx-auto">
           <header className="text-center mb-8 mt-20">
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-[#3e4095]">
+            <h1 id="statistik-page-title" className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-[#3e4095]">
               Statistik <span className="text-[#02a502]">Mahasiswa</span>
             </h1>
             <p className="text-gray-600 mt-2 text-lg">
               Data terkini mengenai mahasiswa disabilitas di lingkungan universitas.
             </p>
           </header>
+          <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {liveAnnouncement}
+          </div>
+          {/* Shortcuts Guide Button */}
+          <div className="fixed bottom-20 right-4 z-40">
+            <button
+              onClick={() => setShowShortcutsGuide(!showShortcutsGuide)}
+              className="rounded-md bg-[#0f7a0f] hover:bg-[#0c650c] text-white px-3 py-2 shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0e7f0e] font-medium flex items-center gap-2"
+              aria-label="Tampilkan panduan shortcut keyboard"
+            >
+              <span>⌨️</span>
+              <span>Panduan Shortcut</span>
+            </button>
+          </div>
+          
+          {/* Shortcuts Guide Modal */}
+          {showShortcutsGuide && (
+            <div role="dialog" aria-modal="true" aria-labelledby="shortcut-guide-title" className="mb-6 bg-white rounded-lg shadow-lg p-6 border-2 border-indigo-200">
+              <div className="flex justify-between items-center mb-4">
+                <h2 id="shortcut-guide-title" className="text-2xl font-bold text-gray-800">Panduan Shortcut Keyboard</h2>
+                <button
+                  onClick={() => setShowShortcutsGuide(false)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                  aria-label="Tutup panduan shortcut"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Filter Shortcuts */}
+                <div>
+                  <h3 className="text-lg font-bold text-indigo-600 mb-3">Shortcut Filter</h3>
+                  <div className="space-y-2 text-sm">
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+1</kbd> - Filter Fakultas</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+2</kbd> - Filter Ragam Disabilitas</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+3</kbd> - Filter IPK</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+4</kbd> - Filter Provinsi</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+5</kbd> - Filter Angkatan</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+6</kbd> - Filter Jalur Masuk</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+7</kbd> - Filter Jenjang</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+8</kbd> - Filter Jenis Kelamin</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+9</kbd> - Filter Jenis Asal Sekolah</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+0</kbd> - Filter Status</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl Ctrl</kbd> - Baca total mahasiswa dengan filter saat ini</p>
+                    <p className="font-medium text-gray-700 mt-3 pt-3 border-t border-indigo-200"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+Z</kbd> - Reset semua filter</p>
+                  </div>
+                </div>
+                
+                {/* Map and Statistics Reading Shortcuts */}
+                <div>
+                  <h3 className="text-lg font-bold text-purple-600 mb-3">Shortcut Peta & Statistik</h3>
+                  <div className="space-y-2 text-sm">
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+A</kbd> - Baca Peta Sebaran</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+S</kbd> - Baca Statistik Angkatan</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+D</kbd> - Baca Statistik Fakultas</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+F</kbd> - Baca Statistik Disabilitas</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+G</kbd> - Baca Statistik Status</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+H</kbd> - Baca Statistik Jenis Kelamin</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+J</kbd> - Baca Statistik Jenjang</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+K</kbd> - Baca Statistik Jenis Asal Sekolah</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+L</kbd> - Baca Statistik IPK</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Alt+Shift+C</kbd> - Toggle Kontras Tinggi</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Shift+Z</kbd> - Cycle Zoom Level</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Shift+Shift</kbd> - Baca Shortcut Aksesibilitas</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">F5</kbd> - Baca ulang panduan awal halaman</p>
+                    <p className="font-medium text-gray-700"><kbd className="bg-gray-100 px-2 py-1 rounded">Spasi</kbd> - Pause / Lanjutkan TTS</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-gray-700">
+                  <strong>💡 Tips:</strong> Setelah memilih filter dengan shortcut, gunakan panah atas/bawah untuk memilih opsi. 
+                  Tekan Ctrl dua kali (Ctrl Ctrl) untuk membaca total mahasiswa dengan filter saat ini. Gunakan Tab untuk berpindah ke filter berikutnya. 
+                  Tekan <strong>Spasi</strong> untuk pause, lalu tekan <strong>Spasi</strong> lagi untuk melanjutkan TTS. Tekan Shift dua kali untuk mendengar rangkuman semua shortcut. Untuk low vision gunakan Alt+Shift+C untuk kontras dan Shift+Z untuk zoom.
+                </p>
+              </div>
+            </div>
+          )}
           {loading && (
             <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 text-blue-700 p-3 text-sm">Memuat data statistik…</div>
           )}
@@ -338,14 +1119,18 @@ export default function StatistikMahasiswaPage() {
             <div className="mb-4 rounded-md border border-red-200 bg-red-50 text-red-700 p-3 text-sm">{error}</div>
           )}
           {/* Filters Section */}
-          <div className="mb-12 bg-white shadow-md rounded-xl p-4 border border-gray-200">
+            <section aria-labelledby="filter-section-title" className="mb-12 bg-white shadow-md rounded-xl p-4 border border-gray-200">
+              <h2 id="filter-section-title" className="text-xl font-bold text-gray-800 mb-4">Filter Data</h2>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <div>
                     <label htmlFor="faculty-filter" className="block text-sm font-medium text-gray-700 mb-1">Fakultas</label>
                       <select
                           id="faculty-filter"
+                          aria-label="Filter by Fakultas, pilih untuk menyaring data"
                           value={selectedFaculty}
                           onChange={(e) => setSelectedFaculty(e.target.value)}
+                          onFocus={() => handleFilterFocusImpl('faculty-filter', selectedFaculty)}
+                          onKeyDown={(e) => handleFilterKeyDown(e, 'faculty-filter')}
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       >
                             {facultyOptions.map(option => (
@@ -357,8 +1142,11 @@ export default function StatistikMahasiswaPage() {
                     <label htmlFor="disability-filter" className="block text-sm font-medium text-gray-700 mb-1">Ragam Disabilitas</label>
                       <select
                           id="disability-filter"
+                          aria-label="Filter by Ragam Disabilitas, pilih untuk menyaring data"
                           value={selectedDisability}
                           onChange={(e) => setSelectedDisability(e.target.value)}
+                          onFocus={() => handleFilterFocusImpl('disability-filter', selectedDisability)}
+                          onKeyDown={(e) => handleFilterKeyDown(e, 'disability-filter')}
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       >
                             <option value="all">Semua Disabilitas</option>
@@ -371,8 +1159,11 @@ export default function StatistikMahasiswaPage() {
                     <label htmlFor="ipk-filter" className="block text-sm font-medium text-gray-700 mb-1">IPK</label>
                       <select
                           id="ipk-filter"
+                          aria-label="Filter by IPK, pilih untuk menyaring data"
                           value={selectedIpk}
                           onChange={(e) => setSelectedIpk(e.target.value)}
+                          onFocus={() => handleFilterFocusImpl('ipk-filter', selectedIpk)}
+                          onKeyDown={(e) => handleFilterKeyDown(e, 'ipk-filter')}
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       >
                             {ipkData.map(option => (
@@ -384,8 +1175,11 @@ export default function StatistikMahasiswaPage() {
                     <label htmlFor="provinsi-filter" className="block text-sm font-medium text-gray-700 mb-1">Provinsi</label>
                       <select
                           id="provinsi-filter"
+                          aria-label="Filter by Provinsi, pilih untuk menyaring data"
                           value={selectedProvinsi}
                           onChange={(e) => setSelectedProvinsi(e.target.value)}
+                          onFocus={() => handleFilterFocusImpl('provinsi-filter', selectedProvinsi)}
+                          onKeyDown={(e) => handleFilterKeyDown(e, 'provinsi-filter')}
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       >
                             {provinsiOptions.map(option => (
@@ -397,8 +1191,11 @@ export default function StatistikMahasiswaPage() {
                     <label htmlFor="angkatan-filter" className="block text-sm font-medium text-gray-700 mb-1">Angkatan</label>
                       <select
                           id="angkatan-filter"
+                          aria-label="Filter by Angkatan, pilih untuk menyaring data"
                           value={selectedAngkatan}
                           onChange={(e) => setSelectedAngkatan(e.target.value)}
+                          onFocus={() => handleFilterFocusImpl('angkatan-filter', selectedAngkatan)}
+                          onKeyDown={(e) => handleFilterKeyDown(e, 'angkatan-filter')}
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       >
                             {angkatanOptions.map(option => (
@@ -410,8 +1207,11 @@ export default function StatistikMahasiswaPage() {
                     <label htmlFor="jalurMasuk-filter" className="block text-sm font-medium text-gray-700 mb-1">Jalur Masuk</label>
                       <select
                           id="jalurMasuk-filter"
+                          aria-label="Filter by Jalur Masuk, pilih untuk menyaring data"
                           value={selectedJalurMasuk}
                           onChange={(e) => setSelectedJalurMasuk(e.target.value)}
+                          onFocus={() => handleFilterFocusImpl('jalurMasuk-filter', selectedJalurMasuk)}
+                          onKeyDown={(e) => handleFilterKeyDown(e, 'jalurMasuk-filter')}
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       >
                             {jalurMasukOptions.map(option => (
@@ -423,8 +1223,11 @@ export default function StatistikMahasiswaPage() {
                     <label htmlFor="jenjang-filter" className="block text-sm font-medium text-gray-700 mb-1">Jenjang</label>
                       <select
                           id="jenjang-filter"
+                          aria-label="Filter by Jenjang, pilih untuk menyaring data"
                           value={selectedJenjang}
                           onChange={(e) => setSelectedJenjang(e.target.value)}
+                          onFocus={() => handleFilterFocusImpl('jenjang-filter', selectedJenjang)}
+                          onKeyDown={(e) => handleFilterKeyDown(e, 'jenjang-filter')}
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       >
                             {jenjangOptions.map(option => (
@@ -436,8 +1239,11 @@ export default function StatistikMahasiswaPage() {
                     <label htmlFor="jenisKelamin-filter" className="block text-sm font-medium text-gray-700 mb-1">Jenis Kelamin</label>
                       <select
                           id="jenisKelamin-filter"
+                          aria-label="Filter by Jenis Kelamin, pilih untuk menyaring data"
                           value={selectedJenisKelamin}
                           onChange={(e) => setSelectedJenisKelamin(e.target.value)}
+                          onFocus={() => handleFilterFocusImpl('jenisKelamin-filter', selectedJenisKelamin)}
+                          onKeyDown={(e) => handleFilterKeyDown(e, 'jenisKelamin-filter')}
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       >
                             {jenisKelaminOptions.map(option => (
@@ -448,8 +1254,11 @@ export default function StatistikMahasiswaPage() {
                     <label htmlFor="jenisAsalSekolah-filter" className="block text-sm font-medium text-gray-700 mb-1">Jenis Asal Sekolah</label>
                       <select
                           id="jenisAsalSekolah-filter"
+                          aria-label="Filter by Jenis Asal Sekolah, pilih untuk menyaring data"
                           value={selectedJenisAsalSekolah}
                           onChange={(e) => setSelectedJenisAsalSekolah(e.target.value)}
+                          onFocus={() => handleFilterFocusImpl('jenisAsalSekolah-filter', selectedJenisAsalSekolah)}
+                          onKeyDown={(e) => handleFilterKeyDown(e, 'jenisAsalSekolah-filter')}
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       >
                             {jenisAsalSekolahOptions.map(option => (
@@ -461,8 +1270,11 @@ export default function StatistikMahasiswaPage() {
                       <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                       <select
                           id="status-filter"
+                          aria-label="Filter by Status, pilih untuk menyaring data"
                           value={selectedStatus}
                           onChange={(e) => setSelectedStatus(e.target.value)}
+                          onFocus={() => handleFilterFocusImpl('status-filter', selectedStatus)}
+                          onKeyDown={(e) => handleFilterKeyDown(e, 'status-filter')}
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                       >
                             <option value="all">Semua Status</option>
@@ -472,260 +1284,640 @@ export default function StatistikMahasiswaPage() {
                       </select>
                   </div>
               </div>
-          </div>
+              </section>
           {/* Total Active Students Card */}
-          <div className="mb-12">
+              <section aria-labelledby="ringkasan-statistik-title" className="mb-12">
+            <h2 id="ringkasan-statistik-title" className="sr-only">Ringkasan Statistik</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white shadow-lg rounded-xl p-6 text-center border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-700 mb-2">
+              <div className="bg-white shadow-lg rounded-xl p-6 text-center border border-gray-200" data-tts-text={`Terdapat ${totalDisabledStudents} mahasiswa disabilitas`}>
+                <h3 className="text-xl font-bold text-gray-700 mb-2">
                 Total Mahasiswa Disabilitas
-                </h2>
+                </h3>
                 <p className="text-5xl font-extrabold text-[#3e4095]">
                 {totalDisabledStudents}
                 </p>
               </div>
-              <div className="bg-white shadow-lg rounded-xl p-6 text-center border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-700 mb-2">
+              <div className="bg-white shadow-lg rounded-xl p-6 text-center border border-gray-200" data-tts-text={`Terdapat ${disabilityChartData.length} ragam disabilitas`}>
+                <h3 className="text-xl font-bold text-gray-700 mb-2">
                 Total Ragam Disabilitas
-                </h2>
+                </h3>
                 <p className="text-5xl font-extrabold text-[#02a502]">
                 {disabilityChartData.length}
                 </p>
               </div>
-              <div className="bg-white shadow-lg rounded-xl p-6 text-center border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-700 mb-2">
+              <div className="bg-white shadow-lg rounded-xl p-6 text-center border border-gray-200" data-tts-text={`Terdapat ${(statusChartData.find(s => s.name === 'Lulus')?.value || 0)} alumni disabilitas`}>
+                <h3 className="text-xl font-bold text-gray-700 mb-2">
                 Total Alumni Disabilitas
-                </h2>
-                <p className="text-5xl font-extrabold text-[#ffc658]">
+                </h3>
+                <p className="text-5xl font-extrabold text-[#a16207]">
                 {statusChartData.find(s => s.name === 'Lulus')?.value || 0}
                 </p>
               </div>
             </div>
-          </div>
+          </section>
           {/* <Map /> */}
           {/* Map Section */}
-          <div className="mb-12 bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+          <section aria-labelledby="map-section-title" className="mb-12 bg-white shadow-lg rounded-xl p-6 border border-gray-200">
+              <h2 id="map-section-title" className="text-2xl font-bold text-center text-gray-800 mb-6">
                   Peta Sebaran Mahasiswa
               </h2>
+              <p id="map-section-desc" className="sr-only">{mapTtsSummary}</p>
               <div className="h-96 w-full">
-                  <MapChart data={mapData} />
+                  <MapChart data={mapData} ariaLabelledBy="map-section-title" ariaDescribedBy="map-section-desc" />
               </div>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          </section>
+          <section aria-labelledby="charts-section-title" className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            <h2 id="charts-section-title" className="sr-only">Grafik Statistik Mahasiswa Disabilitas</h2>
             {/* Line Chart: Jumlah Mahasiswa Disabilitas per Angkatan */}
-            <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+            <div 
+              id="angkatan-chart"
+              className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" 
+              role="button"
+              tabIndex={0}
+              aria-keyshortcuts="Control+S"
+              aria-describedby="angkatan-chart-desc"
+              aria-label="Grafik jumlah mahasiswa disabilitas per angkatan, tekan F untuk mendengarkan deskripsi"
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                // Don't trigger if clicking on SVG or chart elements
+                if (!target.closest('svg') && !target.closest('.recharts-wrapper')) {
+                  window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: angkatanTtsMessage } }));
+                }
+              }}
+              onKeyDown={(e) => handleKeyboardClick(e, () => {
+                window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: angkatanTtsMessage } }));
+              })}
+            >
+              <p id="angkatan-chart-desc" className="sr-only">{angkatanTtsMessage}</p>
+              <h3 className="text-2xl font-bold text-center text-gray-800 mb-6">
                 Jumlah Mahasiswa Disabilitas per Angkatan
-              </h2>
-              <div className="h-80 w-full">
+              </h3>
+              <div className="h-96 w-full" data-tts-ignore="true">
                 <ResponsiveContainer>
                   <LineChart
-                    data={angkatanChartData}
+                    data={paginatedAngkatanData}
                     margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="angkatan" />
-                    <YAxis />
+                    <YAxis allowDecimals={false} />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="jumlah" stroke="#8884d8" activeDot={{ r: 8 }} />
+                    <Line 
+                      type="monotone" 
+                      dataKey="jumlah" 
+                      stroke="#8884d8" 
+                      activeDot={{ 
+                        r: 8,
+                        onClick: (e: any, payload: any) => {
+                          if (payload && payload.payload) {
+                            const year = payload.payload.angkatan;
+                            const count = payload.payload.jumlah;
+                            const yearInIndonesian = numberToIndonesian(Number(year));
+                            const message = `Ada ${count} mahasiswa disabilitas angkatan ${yearInIndonesian}`;
+                            window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: message } }));
+                          }
+                        }
+                      }} 
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
+              {/* Pagination Controls */}
+              <div className="flex items-center justify-center gap-4 mt-4">
+                <button
+                  onClick={() => setAngkatanPage(Math.max(0, angkatanPage - 1))}
+                  disabled={angkatanPage === 0}
+                  className="px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 disabled:bg-gray-300 disabled:text-gray-700 disabled:cursor-not-allowed"
+                >
+                  ← Sebelumnya
+                </button>
+                <span className="text-sm text-gray-700 font-medium">
+                  Halaman {angkatanPage + 1} dari {totalPages}
+                </span>
+                <button
+                  onClick={() => setAngkatanPage(Math.min(totalPages - 1, angkatanPage + 1))}
+                  disabled={angkatanPage === totalPages - 1}
+                  className="px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 disabled:bg-gray-300 disabled:text-gray-700 disabled:cursor-not-allowed"
+                >
+                  Selanjutnya →
+                </button>
+              </div>
+              {/* Data Table for Screen Readers */}
+              <table className="sr-only">
+                <caption>Tabel Data: Jumlah Mahasiswa Disabilitas per Angkatan</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Angkatan</th>
+                    <th scope="col">Jumlah Mahasiswa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {angkatanChartData.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>{item.angkatan}</td>
+                      <td>{item.jumlah}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             {/* Bar Chart: Jumlah Mahasiswa Disabilitas per Fakultas */}
-            <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+            <div 
+              id="fakultas-chart"
+              className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" 
+              role="button"
+              tabIndex={0}
+              aria-keyshortcuts="Control+D"
+              aria-describedby="fakultas-chart-desc"
+              aria-label="Grafik statistik per fakultas, tekan F untuk mendengarkan deskripsi"
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                // Don't trigger if clicking on SVG or chart elements
+                if (!target.closest('svg') && !target.closest('.recharts-wrapper')) {
+                  window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: fakultasTtsMessage } }));
+                }
+              }}
+              onKeyDown={(e) => handleKeyboardClick(e, () => {
+                window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: fakultasTtsMessage } }));
+              })}
+            >
+              <p id="fakultas-chart-desc" className="sr-only">{fakultasTtsMessage}</p>
+              <h3 className="text-2xl font-bold text-center text-gray-800 mb-6">
                 Jumlah Mahasiswa Disabilitas per Fakultas
-              </h2>
-              <div className="h-80 w-full">
+              </h3>
+              <div className="h-96 w-full relative" data-tts-ignore="true">
                 <ResponsiveContainer>
                   <BarChart
                     data={fakultasChartData}
-                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 70 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="fakultas" />
-                    <YAxis />
+                    <XAxis
+                      dataKey="fakultas"
+                      interval={0}
+                      tick={{ angle: -35, textAnchor: 'end', fontSize: 12 } as any }
+                    />
+                    <YAxis allowDecimals={false} />
                     <Tooltip />
-                    <Legend />
-                    <Bar dataKey="jumlah" fill="#82ca9d" />
+                    <Legend verticalAlign="bottom" align="right" wrapperStyle={{ position: 'absolute', bottom: 8, right: 8 }} />
+                    <Bar 
+                      dataKey="jumlah" 
+                      fill="#82ca9d"
+                      onClick={(data: any) => {
+                        if (data && data.fakultas) {
+                          const fakultas = data.fakultas;
+                          const count = data.jumlah;
+                          const message = `Ada ${count} mahasiswa disabilitas di fakultas ${fakultas}`;
+                          window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: message } }));
+                        }
+                      }}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+              {/* Data Table for Screen Readers */}
+              <table className="sr-only">
+                <caption>Tabel Data: Jumlah Mahasiswa Disabilitas per Fakultas</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Fakultas</th>
+                    <th scope="col">Jumlah Mahasiswa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fakultasChartData.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>{item.fakultas}</td>
+                      <td>{item.jumlah}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             {/* Ragam Disabilitas Section */}
-            <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+            <div
+              id="disabilitas-chart"
+              className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              role="button"
+              tabIndex={0}
+              aria-keyshortcuts="Control+F"
+              aria-describedby="disabilitas-chart-desc"
+              aria-label="Grafik ragam disabilitas, tekan F untuk mendengarkan deskripsi"
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (!target.closest('[data-chart-area="pie"]')) {
+                  window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: disabilityTtsMessage } }));
+                }
+              }}
+              onKeyDown={(e) => handleKeyboardClick(e, () => {
+                window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: disabilityTtsMessage } }));
+              })}
+            >
+              <p id="disabilitas-chart-desc" className="sr-only">{disabilityTtsMessage}</p>
+              <h3 className="text-2xl font-bold text-center text-gray-800 mb-6">
                 Ragam Disabilitas
-              </h2>
-              <div className="h-80 w-full">
+              </h3>
+              <div className="h-96 w-full" data-chart-area="pie" data-tts-ignore="true">
                 <ResponsiveContainer>
-                  <PieChart>
+                  <PieChart margin={{ top: 16, right: 24, bottom: 16, left: 24 }}>
                     <Pie
                       data={disabilityChartData}
                       cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={120}
+                      cy="45%"
+                      labelLine={true}
+                      outerRadius="80%"
                       fill="#8884d8"
                       dataKey="value"
-                      label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                      onClick={(data: any) => {
+                        if (data && data.name !== undefined) {
+                          const message = `Terdapat ${data.value} mahasiswa yang memiliki ragam disabilitas ${data.name}`;
+                          window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: message } }));
+                        }
+                      }}
                     >
                       {disabilityChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS_DISABILITY[index % COLORS_DISABILITY.length]} />
                       ))}
+                      <LabelList dataKey="label" position="outside" style={{ fontSize: 14 }} />
                     </Pie>
                     <Tooltip />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+              {/* Data Table for Screen Readers */}
+              <table className="sr-only">
+                <caption>Tabel Data: Ragam Disabilitas</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Ragam Disabilitas</th>
+                    <th scope="col">Jumlah Mahasiswa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {disabilityChartData.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>{item.name}</td>
+                      <td>{item.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             {/* Status Mahasiswa Section */}
-            <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+            <div
+              id="status-chart"
+              className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              role="button"
+              tabIndex={0}
+              aria-keyshortcuts="Control+G"
+              aria-describedby="status-chart-desc"
+              aria-label="Grafik status mahasiswa, tekan F untuk mendengarkan deskripsi"
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (!target.closest('[data-chart-area="pie"]')) {
+                  window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: statusTtsMessage } }));
+                }
+              }}
+              onKeyDown={(e) => handleKeyboardClick(e, () => {
+                window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: statusTtsMessage } }));
+              })}
+            >
+              <p id="status-chart-desc" className="sr-only">{statusTtsMessage}</p>
+              <h3 className="text-2xl font-bold text-center text-gray-800 mb-6">
                 Status Mahasiswa
-              </h2>
-              <div className="h-80 w-full">
+              </h3>
+              <div className="h-96 w-full" data-chart-area="pie" data-tts-ignore="true">
                 <ResponsiveContainer>
-                  <PieChart>
+                  <PieChart margin={{ top: 16, right: 24, bottom: 16, left: 24 }}>
                     <Pie
                       data={statusChartData}
                       cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={120}
+                      cy="45%"
+                      labelLine={true}
+                      outerRadius="80%"
                       fill="#8884d8"
                       dataKey="value"
-                      label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                      onClick={(data: any) => {
+                        if (data && data.name !== undefined) {
+                          const message = `Terdapat ${data.value} mahasiswa dengan status ${data.name}`;
+                          window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: message } }));
+                        }
+                      }}
                     >
                       {statusChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS_STATUS[index % COLORS_STATUS.length]} />
                       ))}
+                      <LabelList dataKey="label" position="outside" style={{ fontSize: 14 }} />
                     </Pie>
                     <Tooltip />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+              {/* Data Table for Screen Readers */}
+              <table className="sr-only">
+                <caption>Tabel Data: Status Mahasiswa</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Status</th>
+                    <th scope="col">Jumlah Mahasiswa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statusChartData.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>{item.name}</td>
+                      <td>{item.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             {/* Jenis Kelamin Pie Chart */}
-            <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+            <div
+              id="jenis-kelamin-chart"
+              className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              role="button"
+              tabIndex={0}
+              aria-keyshortcuts="Control+H"
+              aria-describedby="jenis-kelamin-chart-desc"
+              aria-label="Grafik jenis kelamin, tekan F untuk mendengarkan deskripsi"
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (!target.closest('[data-chart-area="pie"]')) {
+                  window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: jenisKelaminTtsMessage } }));
+                }
+              }}
+              onKeyDown={(e) => handleKeyboardClick(e, () => {
+                window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: jenisKelaminTtsMessage } }));
+              })}
+            >
+              <p id="jenis-kelamin-chart-desc" className="sr-only">{jenisKelaminTtsMessage}</p>
+              <h3 className="text-2xl font-bold text-center text-gray-800 mb-6">
                 Jenis Kelamin
-              </h2>
-              <div className="h-80 w-full">
+              </h3>
+              <div className="h-96 w-full" data-chart-area="pie" data-tts-ignore="true">
                 <ResponsiveContainer>
-                  <PieChart>
+                  <PieChart margin={{ top: 16, right: 24, bottom: 16, left: 24 }}>
                     <Pie
                       data={jenisKelaminChartData}
                       cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={120}
+                      cy="45%"
+                      labelLine={true}
+                      outerRadius="80%"
                       fill="#8884d8"
                       dataKey="value"
-                      label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                      onClick={(data: any) => {
+                        if (data && data.name !== undefined) {
+                          const message = `Terdapat ${data.value} mahasiswa berjenis kelamin ${data.name}`;
+                          window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: message } }));
+                        }
+                      }}
                     >
                       {jenisKelaminChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={['#8884d8', '#82ca9d'][index % 2]} />
                       ))}
+                      <LabelList dataKey="label" position="outside" style={{ fontSize: 14 }} />
                     </Pie>
                     <Tooltip />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+              {/* Data Table for Screen Readers */}
+              <table className="sr-only">
+                <caption>Tabel Data: Jenis Kelamin Mahasiswa</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Jenis Kelamin</th>
+                    <th scope="col">Jumlah Mahasiswa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jenisKelaminChartData.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>{item.name}</td>
+                      <td>{item.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             {/* Jenjang Studi Pie Chart */}
-            <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+            <div
+              id="jenjang-chart"
+              className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              role="button"
+              tabIndex={0}
+              aria-keyshortcuts="Control+J"
+              aria-describedby="jenjang-chart-desc"
+              aria-label="Grafik jenjang studi, tekan F untuk mendengarkan deskripsi"
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (!target.closest('[data-chart-area="pie"]')) {
+                  window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: jenjangTtsMessage } }));
+                }
+              }}
+              onKeyDown={(e) => handleKeyboardClick(e, () => {
+                window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: jenjangTtsMessage } }));
+              })}
+            >
+              <p id="jenjang-chart-desc" className="sr-only">{jenjangTtsMessage}</p>
+              <h3 className="text-2xl font-bold text-center text-gray-800 mb-6">
                 Jenjang Studi
-              </h2>
-              <div className="h-80 w-full">
+              </h3>
+              <div className="h-96 w-full" data-chart-area="pie" data-tts-ignore="true">
                 <ResponsiveContainer>
-                  <PieChart>
+                  <PieChart margin={{ top: 16, right: 24, bottom: 16, left: 24 }}>
                     <Pie
                       data={jenjangChartData}
                       cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={120}
+                      cy="45%"
+                      labelLine={true}
+                      outerRadius="80%"
                       fill="#8884d8"
                       dataKey="value"
-                      label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                      onClick={(data: any) => {
+                        if (data && data.name !== undefined) {
+                          const message = `Terdapat ${data.value} mahasiswa pada jenjang ${data.name}`;
+                          window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: message } }));
+                        }
+                      }}
                     >
                       {jenjangChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={['#ffc658', '#ff7f50', '#a4de6c'][index % 3]} />
                       ))}
+                      <LabelList dataKey="label" position="outside" style={{ fontSize: 14 }} />
                     </Pie>
                     <Tooltip />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+              {/* Data Table for Screen Readers */}
+              <table className="sr-only">
+                <caption>Tabel Data: Jenjang Studi Mahasiswa</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Jenjang</th>
+                    <th scope="col">Jumlah Mahasiswa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jenjangChartData.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>{item.name}</td>
+                      <td>{item.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             {/* Jenis Asal Sekolah Pie Chart */}
-            <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+            <div
+              id="asal-sekolah-chart"
+              className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              role="button"
+              tabIndex={0}
+              aria-keyshortcuts="Control+K"
+              aria-describedby="asal-sekolah-chart-desc"
+              aria-label="Grafik jenis asal sekolah, tekan F untuk mendengarkan deskripsi"
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (!target.closest('[data-chart-area="pie"]')) {
+                  window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: asalSekolahTtsMessage } }));
+                }
+              }}
+              onKeyDown={(e) => handleKeyboardClick(e, () => {
+                window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: asalSekolahTtsMessage } }));
+              })}
+            >
+              <p id="asal-sekolah-chart-desc" className="sr-only">{asalSekolahTtsMessage}</p>
+              <h3 className="text-2xl font-bold text-center text-gray-800 mb-6">
                 Jenis Asal Sekolah
-              </h2>
-              <div className="h-80 w-full">
+              </h3>
+              <div className="h-96 w-full" data-chart-area="pie" data-tts-ignore="true">
                 <ResponsiveContainer>
-                  <PieChart>
+                  <PieChart margin={{ top: 16, right: 24, bottom: 16, left: 24 }}>
                     <Pie
                       data={asalSekolahChartData}
                       cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={120}
+                      cy="45%"
+                      labelLine={true}
+                      outerRadius="80%"
                       fill="#8884d8"
                       dataKey="value"
-                      label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                      onClick={(data: any) => {
+                        if (data && data.name !== undefined) {
+                          const message = `Terdapat ${data.value} mahasiswa dari asal sekolah ${formatAsalSekolahForTts(data.name)}`;
+                          window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: message } }));
+                        }
+                      }}
                     >
                       {asalSekolahChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28'][index % 3]} />
                       ))}
+                      <LabelList dataKey="label" position="outside" style={{ fontSize: 14 }} />
                     </Pie>
                     <Tooltip />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+              {/* Data Table for Screen Readers */}
+              <table className="sr-only">
+                <caption>Tabel Data: Jenis Asal Sekolah Mahasiswa</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Jenis Asal Sekolah</th>
+                    <th scope="col">Jumlah Mahasiswa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {asalSekolahChartData.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>{item.name}</td>
+                      <td>{item.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             {/* IPK Distribution Pie Chart */}
-            <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+            <div
+              id="ipk-chart"
+              className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              role="button"
+              tabIndex={0}
+              aria-keyshortcuts="Control+L"
+              aria-describedby="ipk-chart-desc"
+              aria-label="Grafik distribusi IPK, tekan F untuk mendengarkan deskripsi"
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (!target.closest('[data-chart-area="pie"]')) {
+                  window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: ipkTtsMessage } }));
+                }
+              }}
+              onKeyDown={(e) => handleKeyboardClick(e, () => {
+                window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: ipkTtsMessage } }));
+              })}
+            >
+              <p id="ipk-chart-desc" className="sr-only">{ipkTtsMessage}</p>
+              <h3 className="text-2xl font-bold text-center text-gray-800 mb-6">
                 Distribusi IPK
-              </h2>
-              <div className="h-80 w-full">
+              </h3>
+              <div className="h-96 w-full" data-chart-area="pie" data-tts-ignore="true">
                 <ResponsiveContainer>
-                  <PieChart>
+                  <PieChart margin={{ top: 16, right: 24, bottom: 16, left: 24 }}>
                     <Pie
                       data={ipkDistributionChartData}
                       cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={120}
+                      cy="45%"
+                      labelLine={true}
+                      outerRadius="80%"
                       fill="#8884d8"
                       dataKey="value"
-                      label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                      onClick={(data: any) => {
+                        if (data && data.name !== undefined) {
+                          const message = `Terdapat ${data.value} mahasiswa dengan IPK ${formatIpkForTts(data.name)}`;
+                          window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: message } }));
+                        }
+                      }}
                     >
                       {ipkDistributionChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042'][index % 4]} />
                       ))}
+                      <LabelList dataKey="label" position="outside" style={{ fontSize: 14 }} />
                     </Pie>
                     <Tooltip />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+              {/* Data Table for Screen Readers */}
+              <table className="sr-only">
+                <caption>Tabel Data: Distribusi IPK Mahasiswa</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Range IPK</th>
+                    <th scope="col">Jumlah Mahasiswa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ipkDistributionChartData.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>{item.name}</td>
+                      <td>{item.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </section>
         </div>
-      </section>
+      </main>
     );
   }
 
