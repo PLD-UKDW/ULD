@@ -33,6 +33,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </filter>
           </defs>
         </svg>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function(){ 
+            var s = document.createElement('script'); 
+            var h = document.querySelector('head') || document.body; 
+            s.src = 'https://acsbapp.com/apps/app/dist/js/app.js'; 
+            s.async = true; 
+            s.onload = function(){ 
+              acsbJS.init(); 
+            }; 
+            h.appendChild(s); 
+          })();
+        `}} />
       </body>
     </html>
   );
