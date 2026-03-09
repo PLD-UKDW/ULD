@@ -408,7 +408,7 @@ export default function AccessibilityToolbar() {
             onClick={() => setOpen((o) => !o)}
         >
             <Image src="/accessibility-icon.png" alt="Aksesibilitas" width={30} height={30} priority />
-            <span><b>Aksesibilitas</b></span>
+            <span><strong>Aksesibilitas</strong></span>
         </button>
 
         {open && (
