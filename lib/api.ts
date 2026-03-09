@@ -4,6 +4,26 @@ export const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:40
 
 const api = axios.create({ baseURL: API_BASE });
 
+api.interceptors.request.use((config) => {
+	// Keep legacy frontend calls working by mapping /admin/* to backend /api/admin/*.
+	if (typeof config.url === "string" && config.url.startsWith("/admin/")) {
+		config.url = `/api${config.url}`;
+	}
+
+	if (typeof window !== "undefined") {
+		const token = localStorage.getItem("token");
+		const isAuthedPath = typeof config.url === "string" && (config.url.startsWith("/api/admin/") || config.url.startsWith("/api/test/"));
+		const hasAuthHeader = !!config.headers?.Authorization;
+
+		if (token && isAuthedPath && !hasAuthHeader) {
+			config.headers = config.headers ?? {};
+			config.headers.Authorization = `Bearer ${token}`;
+		}
+	}
+
+	return config;
+});
+
 export async function postJson(path: string, body: unknown) {
 	const url = `${API_BASE}${path}`;
 	const res = await fetch(url, {
