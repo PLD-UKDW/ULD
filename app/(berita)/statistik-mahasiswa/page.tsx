@@ -57,8 +57,12 @@ const ipkData = [
   { value: '1', label: '< 2.5' },
 ];
 
-const COLORS_DISABILITY = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF'];
-const COLORS_STATUS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7f50', '#a4de6c'];
+const COLORS_DISABILITY = ['#993300', '#0057A3', '#005C4B', '#755000', '#8800D1'];
+const COLORS_STATUS = ['#4945C4', '#275D3C', '#754E00'];
+const COLORS_GENDER = ['#000BA3', '#A30000'];
+const COLORS_JENJANG = ['#704B00', '#A30088', '#110094', '#006125'];
+const COLORS_ASAL_SEKOLAH = ['#0057A3', '#00614F', '#6B4900', '#00498A', '#9E0000'];
+const COLORS_IPK = ['#004F94', '#005747', '#755000', '#8F0000'];
 const JENIS_ASAL_SEKOLAH_OPTIONS = ['Homeschooling', 'NonSLB', 'Paket C', 'Sarjana', 'SLB'];
 
 type StudentRecord = {
@@ -1293,25 +1297,25 @@ export default function StatistikMahasiswaPage() {
                 <h3 className="text-xl font-bold text-gray-700 mb-2">
                 Total Mahasiswa Disabilitas
                 </h3>
-                <p className="text-5xl font-extrabold text-[#3e4095]">
+                <h4 className="text-5xl font-extrabold text-[#3e4095]">
                 {totalDisabledStudents}
-                </p>
+                </h4>
               </div>
               <div className="bg-white shadow-lg rounded-xl p-6 text-center border border-gray-200" data-tts-text={`Terdapat ${disabilityChartData.length} ragam disabilitas`}>
                 <h3 className="text-xl font-bold text-gray-700 mb-2">
                 Total Ragam Disabilitas
                 </h3>
-                <p className="text-5xl font-extrabold text-[#02a502]">
+                <h4 className="text-5xl font-extrabold text-[#02a502]">
                 {disabilityChartData.length}
-                </p>
+                </h4>
               </div>
               <div className="bg-white shadow-lg rounded-xl p-6 text-center border border-gray-200" data-tts-text={`Terdapat ${(statusChartData.find(s => s.name === 'Lulus')?.value || 0)} alumni disabilitas`}>
                 <h3 className="text-xl font-bold text-gray-700 mb-2">
                 Total Alumni Disabilitas
                 </h3>
-                <p className="text-5xl font-extrabold text-[#a16207]">
+                <h4 className="text-5xl font-extrabold text-[#a16207]">
                 {statusChartData.find(s => s.name === 'Lulus')?.value || 0}
-                </p>
+                </h4>
               </div>
             </div>
           </section>
@@ -1366,7 +1370,8 @@ export default function StatistikMahasiswaPage() {
                     <Line 
                       type="monotone" 
                       dataKey="jumlah" 
-                      stroke="#8884d8" 
+                      stroke="#403CBE"
+                      name="Jumlah"
                       activeDot={{ 
                         r: 8,
                         onClick: (e: any, payload: any) => {
@@ -1463,7 +1468,8 @@ export default function StatistikMahasiswaPage() {
                     <Legend verticalAlign="bottom" align="right" wrapperStyle={{ position: 'absolute', bottom: 8, right: 8 }} />
                     <Bar 
                       dataKey="jumlah" 
-                      fill="#82ca9d"
+                      fill="#275D3C"
+                      name="Jumlah"
                       onClick={(data: any) => {
                         if (data && data.fakultas) {
                           const fakultas = data.fakultas;
@@ -1677,7 +1683,7 @@ export default function StatistikMahasiswaPage() {
                       }}
                     >
                       {jenisKelaminChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#8884d8', '#82ca9d'][index % 2]} />
+                        <Cell key={`cell-${index}`} fill={COLORS_GENDER[index % COLORS_GENDER.length]} />
                       ))}
                       <LabelList dataKey="label" position="outside" style={{ fontSize: 14 }} />
                     </Pie>
@@ -1747,7 +1753,7 @@ export default function StatistikMahasiswaPage() {
                       }}
                     >
                       {jenjangChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#ffc658', '#ff7f50', '#a4de6c'][index % 3]} />
+                        <Cell key={`cell-${index}`} fill={COLORS_JENJANG[index % COLORS_JENJANG.length]} />
                       ))}
                       <LabelList dataKey="label" position="outside" style={{ fontSize: 14 }} />
                     </Pie>
@@ -1817,7 +1823,7 @@ export default function StatistikMahasiswaPage() {
                       }}
                     >
                       {asalSekolahChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28'][index % 3]} />
+                        <Cell key={`cell-${index}`} fill={COLORS_ASAL_SEKOLAH[index % COLORS_ASAL_SEKOLAH.length]} />
                       ))}
                       <LabelList dataKey="label" position="outside" style={{ fontSize: 14 }} />
                     </Pie>
@@ -1887,7 +1893,7 @@ export default function StatistikMahasiswaPage() {
                       }}
                     >
                       {ipkDistributionChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042'][index % 4]} />
+                        <Cell key={`cell-${index}`} fill={COLORS_IPK[index % COLORS_IPK.length]} />
                       ))}
                       <LabelList dataKey="label" position="outside" style={{ fontSize: 14 }} />
                     </Pie>

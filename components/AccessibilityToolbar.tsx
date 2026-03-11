@@ -407,7 +407,7 @@ export default function AccessibilityToolbar() {
             aria-controls={panelId}
             onClick={() => setOpen((o) => !o)}
         >
-            <Image src="/accessibility-icon.png" alt="Aksesibilitas" width={30} height={30} priority />
+            <Image src="/accessibility-icon.png" alt="" aria-hidden="true" width={30} height={30} priority />
             <span><strong>Aksesibilitas</strong></span>
         </button>
 

@@ -19,12 +19,12 @@ export default function Footer() {
               uld@staff.ukdw.ac.id
             </a>
           </p>
-          <p className="font-semibold mb-2">Sosial Media Kami</p>
+          {/* <p className="font-semibold mb-2">Sosial Media Kami</p>
           <div className="flex gap-3 text-xl">
             <a href="#" className="hover:text-white"><Facebook /></a>
             <a href="#" className="hover:text-white"><Youtube /></a>
             <a href="#" className="hover:text-white"><Instagram /></a>
-          </div>
+          </div> */}
         </div>
         <div>
           <h3 className="text-lg font-bold mb-4 text-white">Site Menu</h3>
