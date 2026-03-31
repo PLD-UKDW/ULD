@@ -36,9 +36,9 @@ export default function LoginPage() {
         document.cookie = `authToken=${res.data.token}; path=/; max-age=86400`;
         document.cookie = `role=${role}; path=/; max-age=86400`;
         if (role === "ADMIN") {
-          router.push("/admin/dashboard");
+          router.replace("/admin/dashboard");
         } else {
-          router.push("/dashboard/camaba");
+          router.replace("/dashboard/camaba");
         }
         return;
       }
