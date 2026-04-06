@@ -1,8 +1,9 @@
 "use client";
 
-import api from "@/lib/api";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import api from "@/lib/api";
+import { useTtsRate, getStoredTtsRate } from "@/lib/ttsRate";
 
 /* =====================================================
    DO TEST PAGE – SCREEN READER FIRST
@@ -27,7 +28,7 @@ export default function DoTestPage() {
      ACCESSIBILITY
   ========================== */
   const [useTTS, setUseTTS] = useState(true);
-  const [currentSpeed, setCurrentSpeed] = useState(1);
+  const [currentSpeed, setCurrentSpeed] = useTtsRate(1);
   const [optionIndex, setOptionIndex] = useState(0);
   const [isTypingEssay, setIsTypingEssay] = useState(false);
   const [lastArrowLeftTime, setLastArrowLeftTime] = useState(0);
@@ -38,6 +39,92 @@ export default function DoTestPage() {
   const arrowLeftTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const spaceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const introSpokenRef = useRef(false);
+  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
+  const getStoredVoicePreference = useCallback((): string | null => {
+    if (typeof window === "undefined") return null;
+
+    const directVoice = localStorage.getItem("tts:voice");
+    if (directVoice) return directVoice;
+
+    const rawA11ySettings = localStorage.getItem("a11y-settings");
+    if (!rawA11ySettings) return null;
+
+    try {
+      const parsed = JSON.parse(rawA11ySettings) as { ttsVoiceName?: string };
+      return parsed.ttsVoiceName?.trim() || null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const getPreferredVoice = useCallback((): SpeechSynthesisVoice | null => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return null;
+
+    const storedVoice = getStoredVoicePreference();
+    if (storedVoice) {
+      const matchedStoredVoice = voices.find((voice) => voice.voiceURI === storedVoice || voice.name === storedVoice);
+      if (matchedStoredVoice) return matchedStoredVoice;
+    }
+
+    const googleIndonesianVoice = voices.find((voice) => /google/i.test(voice.name) && /^id/i.test(voice.lang));
+    if (googleIndonesianVoice) return googleIndonesianVoice;
+
+    const indonesianVoice = voices.find((voice) => /^id/i.test(voice.lang) || /indones/i.test(voice.lang));
+    if (indonesianVoice) return indonesianVoice;
+
+    return voices[0] || null;
+  }, [getStoredVoicePreference]);
+
+  const createUtterance = useCallback(
+    (text: string, rate: number) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = rate;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      const preferredVoice = preferredVoiceRef.current ?? getPreferredVoice();
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+        utterance.lang = preferredVoice.lang;
+      } else {
+        utterance.lang = "id-ID";
+      }
+
+      return utterance;
+    },
+    [getPreferredVoice],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    let fallbackLoadTimeout: NodeJS.Timeout | null = null;
+
+    const loadVoices = () => {
+      preferredVoiceRef.current = getPreferredVoice();
+
+      // Safari/Chrome kadang butuh trigger ulang setelah render awal.
+      if (!preferredVoiceRef.current) {
+        fallbackLoadTimeout = setTimeout(() => {
+          preferredVoiceRef.current = getPreferredVoice();
+        }, 400);
+      }
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      if (fallbackLoadTimeout) {
+        clearTimeout(fallbackLoadTimeout);
+      }
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, [getPreferredVoice]);
 
   /* ==========================
      HELPER: GET LETTER LABEL
@@ -87,10 +174,7 @@ export default function DoTestPage() {
     };
 
     const text = charMap[char] || char;
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "id-ID";
-    // Gunakan rate yang tersimpan
-    u.rate = Number(localStorage.getItem("tts:rate") || 1);
+    const u = createUtterance(text, getStoredTtsRate(1));
     window.speechSynthesis.speak(u);
   };
 
@@ -105,17 +189,12 @@ export default function DoTestPage() {
   const changeSpeed = (delta: number) => {
     setCurrentSpeed((prev) => {
       const next = Math.min(2, Math.max(0.5, prev + delta));
-      localStorage.setItem("tts:rate", String(next));
 
       // Speak feedback
       if (useTTS && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
-        const u1 = new SpeechSynthesisUtterance("Kecepatan suara diubah.");
-        u1.lang = "id-ID";
-        u1.rate = next;
-        const u2 = new SpeechSynthesisUtterance(`Kecepatan sekarang ${next.toFixed(1)}`);
-        u2.lang = "id-ID";
-        u2.rate = next;
+        const u1 = createUtterance("Kecepatan suara diubah.", next);
+        const u2 = createUtterance(`Kecepatan sekarang ${next.toFixed(1)}`, next);
         window.speechSynthesis.speak(u1);
         window.speechSynthesis.speak(u2);
       }
@@ -137,13 +216,10 @@ export default function DoTestPage() {
 
     window.speechSynthesis.cancel();
 
-    // Gunakan rate yang tersimpan
-    const savedRate = Number(localStorage.getItem("tts:rate") || 1);
+    const savedRate = getStoredTtsRate(1);
 
     texts.forEach((text) => {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "id-ID";
-      u.rate = 1;
+      const u = createUtterance(text, savedRate);
       window.speechSynthesis.speak(u);
     });
   };
@@ -161,8 +237,7 @@ export default function DoTestPage() {
 
         window.speechSynthesis.cancel();
 
-        // Gunakan rate yang tersimpan
-        const savedRate = Number(localStorage.getItem("tts:rate") || 1);
+        const savedRate = getStoredTtsRate(1);
 
         if (texts.length === 0) {
           resolve();
@@ -170,9 +245,7 @@ export default function DoTestPage() {
         }
 
         texts.forEach((text, index) => {
-          const u = new SpeechSynthesisUtterance(text);
-          u.lang = "id-ID";
-          u.rate = savedRate;
+          const u = createUtterance(text, savedRate);
 
           // Resolve when the last utterance ends
           if (index === texts.length - 1) {
@@ -184,7 +257,7 @@ export default function DoTestPage() {
         });
       });
     },
-    [useTTS],
+    [useTTS, createUtterance],
   );
 
   /* ==========================
@@ -198,10 +271,6 @@ export default function DoTestPage() {
     }
 
     setUseTTS(localStorage.getItem("accessMode") !== "no-tts");
-
-    // Load saved speed preference
-    const savedSpeed = Number(localStorage.getItem("tts:rate") || 1);
-    setCurrentSpeed(savedSpeed);
 
     api
       .get(`/api/test/${id}`, {
@@ -243,9 +312,9 @@ export default function DoTestPage() {
           queue.push(`Pilihan ${label}. ... ${opt} ...`);
         });
 
-        queue.push("Soal checklist. ... Gunakan panah atas dan bawah untuk navigasi. ... Tekan enter untuk mencentang atau menghapus centang.");
+        queue.push("Soal checklist. ... Gunakan panah atas dan bawah untuk berpindah jawaban. ... Tekan enter untuk mencentang atau menghapus centang.");
       } else {
-        queue.push("Soal esai. ... Tekan enter untuk mengetik jawaban Anda. ... Tekan escape untuk keluar dari mode mengetik.");
+        queue.push("Soal esai. ... Tekan enter untuk masuk ke mode mengetik. ... Tekan escape untuk keluar dari mode mengetik.");
       }
 
       await speakQueueAndWait(queue);
@@ -276,7 +345,7 @@ export default function DoTestPage() {
         `Anda mengerjakan ${test.title}.`,
         `Ada ${questions.length} soal.`,
         "Panah kiri atau kanan untuk pindah soal.",
-        "Panah atas atau bawah untuk pilih jawaban.",
+        "Panah atas atau bawah untuk pindah jawaban.",
         "Tekan enter untuk memilih.",
         "Tekan F untuk membaca ulang soal.",
         "Tekan panah kiri dua kali untuk ulang instruksi.",
@@ -292,15 +361,15 @@ export default function DoTestPage() {
           const label = getLetter(i);
           introAndFirstQuestion.push(`Pilihan ${label}. ... ${opt} ...`);
         });
-        introAndFirstQuestion.push("Gunakan panah atas dan bawah untuk memilih jawaban. ... Tekan enter untuk memilih.");
+        introAndFirstQuestion.push("Gunakan panah atas dan bawah untuk berpindah jawaban. ... Tekan enter untuk memilih jawaban.");
       } else if (q.questionType === "CHECKBOX") {
         q.options.forEach((opt: string, i: number) => {
           const label = getLetter(i);
           introAndFirstQuestion.push(`Pilihan ${label}. ... ${opt} ...`);
         });
-        introAndFirstQuestion.push("Soal checklist. ... Gunakan panah atas dan bawah untuk navigasi. ... Tekan enter untuk mencentang atau menghapus centang.");
+        introAndFirstQuestion.push("Soal checklist. ... Gunakan panah atas dan bawah untuk berpindah jawaban. ... Tekan enter untuk mencentang atau menghapus centang.");
       } else {
-        introAndFirstQuestion.push("Soal esai. ... Tekan enter untuk mengetik jawaban Anda. ... Tekan escape untuk keluar dari mode mengetik.");
+        introAndFirstQuestion.push("Soal esai. ... Tekan enter untuk masuk ke mode mengetik. ... Tekan escape untuk keluar dari mode mengetik.");
       }
 
       await speakQueueAndWait(introAndFirstQuestion);
@@ -358,7 +427,7 @@ export default function DoTestPage() {
             "Tekan enter untuk memilih jawaban. ...",
             "Tekan F untuk membaca ulang soal. ...",
             "Tekan panah kiri dua kali untuk mengulang instruksi ini. ...",
-            "Pada soal esai, tekan escape untuk keluar dari mode mengetik. ...",
+            "Pada soal esai, tekan enter untuk masuk ke mode mengetik, atau tekan escape untuk keluar dari mode mengetik. ...",
             "Gunakan Shift panah atas untuk mempercepat suara, atau Shift panah bawah untuk memperlambat.",
           ]);
           setLastArrowLeftTime(0);
@@ -426,7 +495,7 @@ export default function DoTestPage() {
         } else {
           // Soal terakhir, tampilkan popup submit
           setShowConfirmPopup(true);
-          speakQueue(["Ini adalah soal terakhir. ...", "Apakah Anda yakin ingin mengirim jawaban? ...", "Tekan Spasi untuk konfirmasi. ...", "Tekan Escape untuk batal."]);
+          speakQueue(["Ini adalah soal terakhir. ...", "Apakah Anda yakin ingin mengirim jawaban? ...", "Tekan Enter untuk konfirmasi. ...", "Tekan Escape untuk batal."]);
         }
       }
 
@@ -445,7 +514,7 @@ export default function DoTestPage() {
           setOptionIndex((prev) => {
             const next = e.code === "ArrowDown" ? (prev + 1) % q.options.length : (prev - 1 + q.options.length) % q.options.length;
 
-            speakQueue([`Saat ini anda berada di opsi ${next + 1} dari ${q.options.length}. ...`, `Pilihan ${getLetter(next)}. ...`, q.options[next]]);
+            speakQueue([`Opsi ${getLetter(next)}. ...`, q.options[next]]);
 
             return next;
           });
@@ -470,7 +539,7 @@ export default function DoTestPage() {
 
             const selected = (answers[q.id] as string[]) || [];
             const isChecked = selected.includes(getLetter(next, false));
-            speakQueue([`Saat ini anda berada di opsi ${next + 1} dari ${q.options.length}. ...`, `Pilihan ${getLetter(next)}. ...`, q.options[next], isChecked ? "Sudah dicentang." : "Belum dicentang."]);
+            speakQueue([`Opsi ${getLetter(next)}. ...`, q.options[next], isChecked ? "Sudah dicentang." : "Belum dicentang."]);
 
             return next;
           });
@@ -555,7 +624,7 @@ export default function DoTestPage() {
         speakQueue(["Pengiriman dibatalkan. ..."]);
       }
 
-      if (e.code === "Space") {
+      if (e.code === "Enter") {
         e.preventDefault();
         setShowConfirmPopup(false);
         handleSubmit();
@@ -569,199 +638,201 @@ export default function DoTestPage() {
   /* ==========================
      UI
   ========================== */
-  if (loading) return <p className="p-6 text-xl">Memuat soal...</p>;
-  if (!test) return <p className="p-6 text-xl">Test tidak ditemukan.</p>;
+  if (loading) return <p className="min-h-[100dvh] px-4 pt-24 text-xl sm:px-6 sm:pt-28 lg:px-8 lg:pt-32">Memuat soal...</p>;
+  if (!test) return <p className="min-h-[100dvh] px-4 pt-24 text-xl sm:px-6 sm:pt-28 lg:px-8 lg:pt-32">Test tidak ditemukan.</p>;
 
   const q = questions[current];
 
   return (
-    <div className="max-w-3xl mx-auto p-8 text-black">
-      <h1 className="text-4xl font-bold mb-3">{test.title}</h1>
-      <p className="text-gray-500 text-xl mb-6">{test.description}</p>
+    <div className="min-h-[100dvh] bg-gray-50 px-4 pb-8 pt-24 text-black sm:px-6 sm:pt-28 lg:px-8 lg:pt-32">
+      <div className="mx-auto max-w-3xl">
+        <h1 className="text-3xl font-bold mb-3 sm:text-4xl">{test.title}</h1>
+        <p className="text-base text-gray-500 mb-6 sm:text-xl">{test.description}</p>
 
-      <div className="border rounded-xl p-8 shadow-sm">
-        <h2 className="text-2xl font-semibold mb-5">
-          Soal {current + 1} dari {questions.length}
-        </h2>
+        <div className="border rounded-xl bg-white p-5 shadow-sm sm:p-8">
+          <h2 className="text-xl font-semibold mb-5 sm:text-2xl">
+            Soal {current + 1} dari {questions.length}
+          </h2>
 
-        <p className="text-xl mb-5">{q.text}</p>
+          <p className="text-base mb-5 sm:text-xl">{q.text}</p>
 
-        {q.questionType === "MULTIPLE_CHOICE" && (
-          <div className="space-y-4">
-            {q.options.map((opt: string, i: number) => {
-              const key = getLetter(i, false);
-              const isKeyboardFocused = useTTS && optionIndex === i;
+          {q.questionType === "MULTIPLE_CHOICE" && (
+            <div className="space-y-4">
+              {q.options.map((opt: string, i: number) => {
+                const key = getLetter(i, false);
+                const isKeyboardFocused = useTTS && optionIndex === i;
 
-              return (
-                <label
-                  key={i}
-                  className={`flex items-center gap-3 p-4 border-2 rounded-lg text-lg cursor-pointer transition-colors ${answers[q.id] === key ? "border-green-500 bg-green-50" : isKeyboardFocused ? "border-green-800 bg-green-50" : "border-green-200 hover:bg-green-50 hover:border-green-400"}`}
-                >
-                  <input type="radio" name={String(q.id)} checked={answers[q.id] === key} onChange={() => setAnswers((p) => ({ ...p, [q.id]: key }))} className="w-5 h-5" />
-                  {opt}
-                </label>
-              );
-            })}
-          </div>
-        )}
+                return (
+                  <label
+                    key={i}
+                    className={`flex items-center gap-3 p-4 border-2 rounded-lg text-lg cursor-pointer transition-colors ${answers[q.id] === key ? "border-green-500 bg-green-50" : isKeyboardFocused ? "border-green-800 bg-green-50" : "border-green-200 hover:bg-green-50 hover:border-green-400"}`}
+                  >
+                    <input type="radio" name={String(q.id)} checked={answers[q.id] === key} onChange={() => setAnswers((p) => ({ ...p, [q.id]: key }))} className="w-5 h-5" />
+                    {opt}
+                  </label>
+                );
+              })}
+            </div>
+          )}
 
-        {q.questionType === "CHECKBOX" && (
-          <div className="space-y-4">
-            {q.options.map((opt: string, i: number) => {
-              const key = getLetter(i, false);
-              const selected = (answers[q.id] as string[]) || [];
-              const isKeyboardFocused = useTTS && optionIndex === i;
+          {q.questionType === "CHECKBOX" && (
+            <div className="space-y-4">
+              {q.options.map((opt: string, i: number) => {
+                const key = getLetter(i, false);
+                const selected = (answers[q.id] as string[]) || [];
+                const isKeyboardFocused = useTTS && optionIndex === i;
 
-              return (
-                <label
-                  key={i}
-                  className={`flex items-center gap-3 p-4 border-2 rounded-lg text-lg cursor-pointer transition-colors ${selected.includes(key) ? "border-green-500 bg-green-50" : isKeyboardFocused ? "border-green-800 bg-green-50" : "border-green-200 hover:bg-green-50 hover:border-green-400"}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(key)}
-                    onChange={(e) => {
-                      setAnswers((p) => {
-                        const prev = (p[q.id] as string[]) || [];
-                        if (e.target.checked) {
-                          return { ...p, [q.id]: [...prev, key] };
-                        } else {
-                          return { ...p, [q.id]: prev.filter((k) => k !== key) };
-                        }
-                      });
-                    }}
-                    className="w-5 h-5"
-                  />
-                  {opt}
-                </label>
-              );
-            })}
-          </div>
-        )}
+                return (
+                  <label
+                    key={i}
+                    className={`flex items-center gap-3 p-4 border-2 rounded-lg text-lg cursor-pointer transition-colors ${selected.includes(key) ? "border-green-500 bg-green-50" : isKeyboardFocused ? "border-green-800 bg-green-50" : "border-green-200 hover:bg-green-50 hover:border-green-400"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(key)}
+                      onChange={(e) => {
+                        setAnswers((p) => {
+                          const prev = (p[q.id] as string[]) || [];
+                          if (e.target.checked) {
+                            return { ...p, [q.id]: [...prev, key] };
+                          } else {
+                            return { ...p, [q.id]: prev.filter((k) => k !== key) };
+                          }
+                        });
+                      }}
+                      className="w-5 h-5"
+                    />
+                    {opt}
+                  </label>
+                );
+              })}
+            </div>
+          )}
 
-        {q.questionType === "ESSAY" && (
-          <div className="space-y-3">
-            {!isTypingEssay && useTTS && <p className="text-lg text-blue-600 font-medium">Tekan Enter untuk mulai mengetik jawaban</p>}
-            <textarea
-              ref={essayRef}
-              className={`w-full border rounded-lg p-4 text-lg ${isTypingEssay ? "border-blue-500 ring-2 ring-blue-300" : ""}`}
-              rows={6}
-              value={(answers[q.id] as string) ?? ""}
-              onChange={(e) => {
-                const oldValue = (answers[q.id] as string) ?? "";
-                const newValue = e.target.value;
+          {q.questionType === "ESSAY" && (
+            <div className="space-y-3">
+              {!isTypingEssay && useTTS && <p className="text-lg text-blue-600 font-medium">Tekan Enter untuk mulai mengetik jawaban</p>}
+              <textarea
+                ref={essayRef}
+                className={`w-full border rounded-lg p-4 text-lg ${isTypingEssay ? "border-blue-500 ring-2 ring-blue-300" : ""}`}
+                rows={6}
+                value={(answers[q.id] as string) ?? ""}
+                onChange={(e) => {
+                  const oldValue = (answers[q.id] as string) ?? "";
+                  const newValue = e.target.value;
 
-                // Detect what character was typed
-                if (newValue.length > oldValue.length) {
-                  const newChar = newValue[newValue.length - 1];
-                  speakChar(newChar);
-                } else if (newValue.length < oldValue.length) {
-                  // Character was deleted
-                  speakChar("hapus");
-                }
-
-                setAnswers((p) => ({ ...p, [q.id]: newValue }));
-              }}
-              onKeyDown={(e) => {
-                if (e.code === "Escape") {
-                  e.preventDefault();
-                  setIsTypingEssay(false);
-                  essayRef.current?.blur();
-
-                  const essayAnswer = (answers[q.id] as string) ?? "";
-                  if (essayAnswer.trim()) {
-                    speakQueue(["Keluar dari mode mengetik. ...", "Jawaban Anda: ...", essayAnswer, "Gunakan panah kiri kanan untuk navigasi soal."]);
-                  } else {
-                    speakQueue(["Keluar dari mode mengetik. ...", "Gunakan panah kiri kanan untuk navigasi soal."]);
+                  // Detect what character was typed
+                  if (newValue.length > oldValue.length) {
+                    const newChar = newValue[newValue.length - 1];
+                    speakChar(newChar);
+                  } else if (newValue.length < oldValue.length) {
+                    // Character was deleted
+                    speakChar("hapus");
                   }
-                }
+
+                  setAnswers((p) => ({ ...p, [q.id]: newValue }));
+                }}
+                onKeyDown={(e) => {
+                  if (e.code === "Escape") {
+                    e.preventDefault();
+                    setIsTypingEssay(false);
+                    essayRef.current?.blur();
+
+                    const essayAnswer = (answers[q.id] as string) ?? "";
+                    if (essayAnswer.trim()) {
+                      speakQueue(["Keluar dari mode mengetik. ...", "Jawaban Anda: ...", essayAnswer, "Gunakan panah kiri kanan untuk navigasi soal."]);
+                    } else {
+                      speakQueue(["Keluar dari mode mengetik. ...", "Gunakan panah kiri kanan untuk navigasi soal."]);
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  if (useTTS) setIsTypingEssay(false);
+                }}
+                placeholder={useTTS && !isTypingEssay ? "Tekan Enter untuk mengetik..." : "Ketik jawaban Anda di sini..."}
+                readOnly={useTTS && !isTypingEssay}
+              />
+              {isTypingEssay && <p className="text-sm text-gray-500">Tekan Escape untuk keluar dari mode mengetik</p>}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+          <button onClick={() => (current === 0 ? router.push("/dashboard/camaba") : setCurrent((c) => c - 1))} className="w-full rounded-lg border px-5 py-3 text-base font-semibold sm:w-auto sm:text-lg">
+            {current === 0 ? "← Kembali" : "← Sebelumnya"}
+          </button>
+
+          {current < questions.length - 1 ? (
+            <button onClick={() => setCurrent((c) => c + 1)} className="w-full rounded-lg bg-blue-600 px-5 py-3 text-base font-semibold text-white sm:w-auto sm:text-lg">
+              Selanjutnya →
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setShowConfirmPopup(true);
+                speakQueue(["Apakah Anda yakin ingin mengirim jawaban? ...", "Tekan Spasi untuk konfirmasi. ...", "Tekan Escape untuk batal."]);
               }}
-              onBlur={() => {
-                if (useTTS) setIsTypingEssay(false);
-              }}
-              placeholder={useTTS && !isTypingEssay ? "Tekan Enter untuk mengetik..." : "Ketik jawaban Anda di sini..."}
-              readOnly={useTTS && !isTypingEssay}
-            />
-            {isTypingEssay && <p className="text-sm text-gray-500">Tekan Escape untuk keluar dari mode mengetik</p>}
+              disabled={submitting}
+              className="w-full rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white sm:w-auto sm:text-lg"
+            >
+              {submitting ? "Mengirim..." : "Kirim Jawaban"}
+            </button>
+          )}
+        </div>
+
+        {/* ================= POPUP KONFIRMASI SUBMIT ================= */}
+        {showConfirmPopup && (
+          <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl sm:p-8">
+              <h2 className="mb-4 text-center text-xl font-bold sm:text-2xl">Konfirmasi Pengiriman</h2>
+              <p className="mb-6 text-center text-base sm:text-lg">Apakah Anda yakin ingin mengirim jawaban Anda?</p>
+              <p className="mb-6 text-center text-sm text-gray-600 sm:text-base">Jawaban yang sudah dikirim tidak dapat diubah.</p>
+              <p className="mb-6 text-center text-sm font-medium text-blue-600 sm:text-base">Escape = Batal | Spasi = Kirim</p>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  onClick={() => {
+                    setShowConfirmPopup(false);
+                    speakQueue(["Pengiriman dibatalkan. ..."]);
+                  }}
+                  className="flex-1 rounded-lg bg-gray-300 px-5 py-3 text-base font-semibold text-gray-800 transition hover:bg-gray-400 sm:text-lg"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => {
+                    setShowConfirmPopup(false);
+                    handleSubmit();
+                  }}
+                  disabled={submitting}
+                  className="flex-1 rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white transition hover:bg-green-700 sm:text-lg"
+                >
+                  {submitting ? "Mengirim..." : "Ya, Kirim"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
-      </div>
 
-      <div className="flex justify-between mt-8">
-        <button onClick={() => (current === 0 ? router.push("/dashboard/camaba") : setCurrent((c) => c - 1))} className="px-5 py-3 border rounded-lg text-lg font-semibold">
-          {current === 0 ? "← Kembali" : "← Sebelumnya"}
-        </button>
+        {/* FLOATING SPEED CONTROL */}
+        {useTTS && !showConfirmPopup && (
+          <div className="fixed bottom-4 right-4 z-40 flex flex-col items-center gap-3 rounded-xl border bg-white p-4 shadow-xl sm:bottom-6 sm:right-6">
+            <p className="text-sm font-semibold text-black">Kecepatan Suara</p>
 
-        {current < questions.length - 1 ? (
-          <button onClick={() => setCurrent((c) => c + 1)} className="px-5 py-3 bg-blue-600 text-white rounded-lg text-lg font-semibold">
-            Selanjutnya →
-          </button>
-        ) : (
-          <button
-            onClick={() => {
-              setShowConfirmPopup(true);
-              speakQueue(["Apakah Anda yakin ingin mengirim jawaban? ...", "Tekan Spasi untuk konfirmasi. ...", "Tekan Escape untuk batal."]);
-            }}
-            disabled={submitting}
-            className="px-5 py-3 bg-green-600 text-white rounded-lg text-lg font-semibold"
-          >
-            {submitting ? "Mengirim..." : "Kirim Jawaban"}
-          </button>
-        )}
-      </div>
-
-      {/* ================= POPUP KONFIRMASI SUBMIT ================= */}
-      {showConfirmPopup && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded-xl w-full max-w-md shadow-xl">
-            <h2 className="text-2xl font-bold mb-4 text-center">Konfirmasi Pengiriman</h2>
-            <p className="text-lg text-center mb-6">Apakah Anda yakin ingin mengirim jawaban Anda?</p>
-            <p className="text-center text-gray-600 mb-6">Jawaban yang sudah dikirim tidak dapat diubah.</p>
-            <p className="text-center text-blue-600 font-medium mb-6">Escape = Batal | Spasi = Kirim</p>
-
-            <div className="flex gap-4">
-              <button
-                onClick={() => {
-                  setShowConfirmPopup(false);
-                  speakQueue(["Pengiriman dibatalkan. ..."]);
-                }}
-                className="flex-1 px-5 py-3 bg-gray-300 text-gray-800 rounded-lg text-lg font-semibold hover:bg-gray-400 transition"
-              >
-                Batal
+            <div className="flex items-center gap-3">
+              <button onClick={() => changeSpeed(-0.1)} className="rounded-lg bg-gray-200 px-3 py-2 text-lg font-bold">
+                −
               </button>
-              <button
-                onClick={() => {
-                  setShowConfirmPopup(false);
-                  handleSubmit();
-                }}
-                disabled={submitting}
-                className="flex-1 px-5 py-3 bg-green-600 text-white rounded-lg text-lg font-semibold hover:bg-green-700 transition"
-              >
-                {submitting ? "Mengirim..." : "Ya, Kirim"}
+
+              <span className="text-lg font-semibold w-12 text-center">{currentSpeed.toFixed(1)}</span>
+
+              <button onClick={() => changeSpeed(0.1)} className="rounded-lg bg-gray-200 px-3 py-2 text-lg font-bold">
+                +
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* FLOATING SPEED CONTROL */}
-      {useTTS && !showConfirmPopup && (
-        <div className="fixed bottom-6 right-6 bg-white shadow-xl border rounded-xl p-4 flex flex-col gap-3 items-center">
-          <p className="text-sm font-semibold text-black">Kecepatan Suara</p>
-
-          <div className="flex items-center gap-3">
-            <button onClick={() => changeSpeed(-0.1)} className="px-3 py-2 bg-gray-200 rounded-lg text-lg font-bold">
-              −
-            </button>
-
-            <span className="text-lg font-semibold w-12 text-center">{currentSpeed.toFixed(1)}</span>
-
-            <button onClick={() => changeSpeed(0.1)} className="px-3 py-2 bg-gray-200 rounded-lg text-lg font-bold">
-              +
-            </button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import api from "@/lib/api";
-import { LogOut } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import api from "@/lib/api";
+import { useTtsRate } from "@/lib/ttsRate";
 
 /* =====================================================
    DASHBOARD CAMABA – ACCESSIBILITY & SCREEN READER FIRST
@@ -22,12 +22,64 @@ export default function CamabaDashboardPage() {
      ACCESSIBILITY STATE
   ========================== */
   const [useTTS, setUseTTS] = useState(true);
+  const [useKeyboardNav, setUseKeyboardNav] = useState(true);
   const [showAccessPopup, setShowAccessPopup] = useState(false);
 
   /* ==========================
      TTS SPEED CONTROL
   ========================== */
-  const [speechRate, setSpeechRate] = useState(1.1);
+  const [speechRate, setSpeechRate] = useTtsRate(1.1);
+  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
+  const getPreferredVoice = useCallback((): SpeechSynthesisVoice | null => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return null;
+
+    const googleIndonesianVoice = voices.find((voice) => /google/i.test(voice.name) && /^id/i.test(voice.lang));
+    if (googleIndonesianVoice) return googleIndonesianVoice;
+
+    const indonesianVoice = voices.find((voice) => /^id/i.test(voice.lang) || /indones/i.test(voice.lang));
+    if (indonesianVoice) return indonesianVoice;
+
+    return voices[0] || null;
+  }, []);
+
+  const createUtterance = useCallback(
+    (text: string, rate: number) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = rate;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      const preferredVoice = preferredVoiceRef.current ?? getPreferredVoice();
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+        utterance.lang = preferredVoice.lang;
+      } else {
+        utterance.lang = "id-ID";
+      }
+
+      return utterance;
+    },
+    [getPreferredVoice],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const loadVoices = () => {
+      preferredVoiceRef.current = getPreferredVoice();
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, [getPreferredVoice]);
 
   /* ==========================
      NAVIGATION STATE
@@ -64,9 +116,7 @@ export default function CamabaDashboardPage() {
     const rate = overrideRate ?? speechRate;
 
     texts.forEach((text) => {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "id-ID";
-      u.rate = rate;
+      const u = createUtterance(text, rate);
       window.speechSynthesis.speak(u);
     });
   };
@@ -89,9 +139,7 @@ export default function CamabaDashboardPage() {
       }
 
       texts.forEach((text, index) => {
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = "id-ID";
-        u.rate = speechRate;
+        const u = createUtterance(text, speechRate);
 
         if (index === texts.length - 1) {
           u.onend = () => resolve();
@@ -148,16 +196,30 @@ export default function CamabaDashboardPage() {
   useEffect(() => {
     if (loading) return;
 
+    const savedMode = localStorage.getItem("accessMode");
+    if (savedMode === "no-tts") {
+      setUseTTS(false);
+      setUseKeyboardNav(false);
+      setAccessIndex(1);
+    } else {
+      setUseTTS(true);
+      setUseKeyboardNav(true);
+      setAccessIndex(0);
+    }
+
     const popupShown = sessionStorage.getItem("popupShown");
     if (popupShown === "true") return;
 
     sessionStorage.setItem("popupShown", "true");
 
     setUseTTS(true);
+    setUseKeyboardNav(true);
     setShowAccessPopup(true);
 
     const timeout = setTimeout(() => {
-      window.speechSynthesis.cancel();
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
 
       speakQueue(["Selamat datang di halaman tes.", "Silakan pilih cara penggunaan.", "Gunakan panah atas atau bawah.", "Tekan enter untuk memilih.", `Pilihan satu. ${accessOptions[0].label}.`, `Pilihan dua. ${accessOptions[1].label}.`]);
     }, 500);
@@ -191,12 +253,14 @@ export default function CamabaDashboardPage() {
 
         if (selected.id === "tts") {
           setUseTTS(true);
+          setUseKeyboardNav(true);
+          localStorage.setItem("accessMode", "tts");
 
           speakQueue([
             "Bantuan suara aktif.",
             `Ada ${tests.length} tes tersedia.`,
             "Gunakan panah kanan atau kiri untuk memilih.",
-            "Tekan spasi untuk membuka.",
+            "Tekan enter untuk membuka.",
             "Tekan panah kiri dua kali untuk mendengar ulang instruksi.",
             "Tekan escape untuk keluar.",
             "Gunakan Shift dan panah atas atau bawah untuk mengatur kecepatan suara.",
@@ -204,6 +268,8 @@ export default function CamabaDashboardPage() {
         } else {
           window.speechSynthesis.cancel();
           setUseTTS(false);
+          setUseKeyboardNav(false);
+          localStorage.setItem("accessMode", "no-tts");
         }
 
         setShowAccessPopup(false);
@@ -230,7 +296,7 @@ export default function CamabaDashboardPage() {
      DASHBOARD KEYBOARD NAV
   ===================================================== */
   useEffect(() => {
-    if (!useTTS || showAccessPopup || !tests.length) return;
+    if (!useTTS || !useKeyboardNav || showAccessPopup || !tests.length) return;
 
     const handler = async (e: KeyboardEvent) => {
       /* SPEED CONTROL */
@@ -257,7 +323,7 @@ export default function CamabaDashboardPage() {
             "Instruksi.",
             `Anda berada di tes ${selectedIndex + 1} dari ${tests.length}.`,
             "Gunakan panah kanan atau kiri untuk memilih.",
-            "Tekan spasi untuk membuka.",
+            "Tekan enter untuk membuka.",
             "Tekan panah kiri dua kali untuk mengulang instruksi.",
             "Tekan escape untuk keluar akun.",
             "Gunakan shift panah atas atau bawah untuk mengatur kecepatan suara.",
@@ -316,15 +382,15 @@ export default function CamabaDashboardPage() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [useTTS, tests, selectedIndex, showAccessPopup, lastArrowLeftTime]);
+  }, [useTTS, useKeyboardNav, tests, selectedIndex, showAccessPopup, lastArrowLeftTime]);
 
   /* ==========================
      UI
   ========================== */
-  if (loading) return <p className="p-6 text-black text-xl">Memuat...</p>;
+  if (loading) return <p className="px-4 pt-24 text-black text-lg sm:px-6 sm:pt-28 sm:text-xl">Memuat...</p>;
 
   return (
-    <div className="min-h-screen max-w-5xl mx-auto p-6 text-black">
+    <div className="min-h-[100dvh] max-w-5xl mx-auto px-4 pb-8 pt-24 text-black sm:px-6 sm:pt-28 lg:pt-32">
       {showAccessPopup && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-white p-8 rounded-xl w-full max-w-lg">
@@ -345,37 +411,26 @@ export default function CamabaDashboardPage() {
       )}
 
       {/* HEADER */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-4xl font-bold">Halaman Tes Calon Mahasiswa</h1>
-
-        <button
-          onClick={() => {
-            window.speechSynthesis.cancel();
-            localStorage.removeItem("token");
-            sessionStorage.removeItem("popupShown");
-            window.location.href = "/login";
-          }}
-          className="flex items-center gap-2 px-5 py-3 bg-red-500 text-white text-lg font-semibold rounded-lg hover:bg-red-600 transition"
-        >
-          <LogOut className="w-5 h-5" />
-          Logout
-        </button>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold leading-tight sm:text-3xl lg:text-4xl">Halaman Tes Calon Mahasiswa</h1>
       </div>
 
-      {!useTTS && <p className="mb-4 text-black text-xl">Klik tombol pada kartu tes untuk memulai atau melihat hasil.</p>}
+      {!useTTS && <p className="mb-4 text-base text-black sm:text-lg lg:text-xl">Klik tombol pada kartu tes untuk memulai atau melihat hasil.</p>}
 
       {/* LIST TES */}
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
         {tests.map((t, idx) => (
-          <div key={t.id} className={`border rounded-xl p-6 bg-white shadow ${useTTS && idx === selectedIndex ? "outline outline-3 outline-green-600" : ""}`}>
-            <h2 className="text-2xl font-semibold">{t.title}</h2>
+          <div key={t.id} className={`rounded-xl border bg-white p-4 shadow sm:p-6 ${useTTS && idx === selectedIndex ? "outline outline-3 outline-green-600" : ""}`}>
+            <h2 className="text-xl font-semibold sm:text-2xl">{t.title}</h2>
 
-            <p className="text-green-700 mt-2 text-lg">{t.description}</p>
+            <p className="mt-2 text-base text-green-700 sm:text-lg">{t.description}</p>
 
-            <span className={`inline-block mt-3 px-4 py-2 text-lg rounded-full ${t.completed ? "bg-green-100 text-green-700" : "bg-green-50 text-green-800"}`}>{t.completed ? "Sudah mengerjakan" : "Belum mengerjakan"}</span>
+            <span className={`mt-3 inline-block rounded-full px-3 py-2 text-sm sm:px-4 sm:text-base lg:text-lg ${t.completed ? "bg-green-100 text-green-700" : "bg-green-50 text-green-800"}`}>
+              {t.completed ? "Sudah mengerjakan" : "Belum mengerjakan"}
+            </span>
 
             {!useTTS && (
-              <button onClick={() => router.push(t.completed ? `/test/${t.id}/result?attemptId=${t.latestAttemptId}` : `/test/${t.id}`)} className="mt-4 w-full bg-green-600 text-white py-3 text-lg font-semibold rounded-lg">
+              <button onClick={() => router.push(t.completed ? `/test/${t.id}/result?attemptId=${t.latestAttemptId}` : `/test/${t.id}`)} className="mt-4 w-full rounded-lg bg-green-600 py-3 text-base font-semibold text-white sm:text-lg">
                 {t.completed ? "Lihat Hasil" : "Mulai Mengerjakan"}
               </button>
             )}

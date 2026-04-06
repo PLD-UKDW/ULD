@@ -4,7 +4,9 @@ import { NavigationMenu, NavigationMenuContent, NavigationMenuItem, NavigationMe
 import { Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { isLoggedIn } from "@/lib/auth";
 
 const componentsTentang: { title: string; href: string; description?: string }[] = [
   { title: "Sejarah", href: "/sejarah" },
@@ -15,7 +17,7 @@ const componentsTentang: { title: string; href: string; description?: string }[]
 ];
 
 const componentsProsedur: { title: string; href: string }[] = [
-  { title: "SOP PMJD", href: "/sop-pmjd" },
+  // { title: "SOP PMJD", href: "/sop-pmjd" },
   { title: "SOP Pendampingan", href: "/sop-pendampingan" },
   { title: "SOP Rekrutmen", href: "/sop-rekrutmen" },
   { title: "SOP Layak Etik", href: "/sop-layak-etik" },
@@ -39,6 +41,39 @@ const componentsPMJD: { title: string; href: string }[] = [
 
 export function NavigationMenuDemo() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    setLoggedIn(isLoggedIn());
+
+    const syncAuthStatus = () => setLoggedIn(isLoggedIn());
+    window.addEventListener("storage", syncAuthStatus);
+    window.addEventListener("auth-change", syncAuthStatus);
+
+    return () => {
+      window.removeEventListener("storage", syncAuthStatus);
+      window.removeEventListener("auth-change", syncAuthStatus);
+    };
+  }, [pathname]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("admin_token");
+    sessionStorage.removeItem("popupShown");
+
+    document.cookie = "authToken=; Max-Age=0; path=/";
+    document.cookie = "role=; Max-Age=0; path=/";
+    document.cookie = "authStage=; Max-Age=0; path=/";
+    document.cookie = "pendingRegNumber=; Max-Age=0; path=/";
+
+    window.dispatchEvent(new Event("auth-change"));
+    setLoggedIn(false);
+    setMobileOpen(false);
+    router.push("/login");
+  };
 
   return (
     <nav className="fixed top-0 left-0 w-full bg-[#02a502] shadow z-50 font-sans">
@@ -123,7 +158,7 @@ export function NavigationMenuDemo() {
                   </ul>
                 </NavigationMenuContent>
               </NavigationMenuItem>
-              <NavigationMenuItem>
+              {/* <NavigationMenuItem>
                 <NavigationMenuTrigger>PMJD</NavigationMenuTrigger>
                 <NavigationMenuContent className="bg-white/95 backdrop-blur-md shadow-xl rounded-xl border border-gray-200 p-4 animate-in fade-in-80 slide-in-from-top-5">
                   <ul className="grid w-[260px] gap-2">
@@ -138,7 +173,7 @@ export function NavigationMenuDemo() {
                     ))}
                   </ul>
                 </NavigationMenuContent>
-              </NavigationMenuItem>
+              </NavigationMenuItem> */}
               <NavigationMenuItem>
                 <NavigationMenuLink asChild>
                   <Link href="https://pmb.ukdw.ac.id/" target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-lg text-sm font-semibold text-white hover:text-green-700 hover:bg-green-50 transition-colors duration-200">
@@ -150,7 +185,15 @@ export function NavigationMenuDemo() {
           </NavigationMenu>
         </div>
         <div className="hidden min-[975px]:flex items-center gap-4">
-          <Link href="/login" className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#008000] shadow hover:bg-gray-100 transition">Login</Link>
+          {loggedIn ? (
+            <button onClick={handleLogout} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#008000] shadow hover:bg-gray-100 transition" type="button">
+              Logout
+            </button>
+          ) : (
+            <Link href="/login" className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#008000] shadow hover:bg-gray-100 transition">
+              Login
+            </Link>
+          )}
         </div>
       </div>
       {mobileOpen && (
@@ -162,7 +205,9 @@ export function NavigationMenuDemo() {
                 <ul className="pl-4">
                   {componentsTentang.map((c) => (
                     <li key={c.title}>
-                      <Link href={c.href} className="block py-1 text-white hover:underline">{c.title}</Link>
+                      <Link href={c.href} className="block py-1 text-white hover:underline">
+                        {c.title}
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -174,7 +219,9 @@ export function NavigationMenuDemo() {
                 <ul className="pl-4">
                   {componentsProsedur.map((c) => (
                     <li key={c.title}>
-                      <Link href={c.href} className="block py-1 text-white hover:underline">{c.title}</Link>
+                      <Link href={c.href} className="block py-1 text-white hover:underline">
+                        {c.title}
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -186,7 +233,9 @@ export function NavigationMenuDemo() {
                 <ul className="pl-4">
                   {componentsLayanan.map((c) => (
                     <li key={c.title}>
-                      <Link href={c.href} className="block py-1 text-white hover:underline">{c.title}</Link>
+                      <Link href={c.href} className="block py-1 text-white hover:underline">
+                        {c.title}
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -198,7 +247,9 @@ export function NavigationMenuDemo() {
                 <ul className="pl-4">
                   {componentsBerita.map((c) => (
                     <li key={c.title}>
-                      <Link href={c.href} className="block py-1 text-white hover:underline">{c.title}</Link>
+                      <Link href={c.href} className="block py-1 text-white hover:underline">
+                        {c.title}
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -210,17 +261,29 @@ export function NavigationMenuDemo() {
                 <ul className="pl-4">
                   {componentsPMJD.map((c) => (
                     <li key={c.title}>
-                      <Link href={c.href} className="block py-1 text-white hover:underline">{c.title}</Link>
+                      <Link href={c.href} className="block py-1 text-white hover:underline">
+                        {c.title}
+                      </Link>
                     </li>
                   ))}
                 </ul>
               </details>
             </li>
             <li>
-              <Link href="https://pmb.ukdw.ac.id/" className="block py-2 px-2 text-white rounded hover:bg-[#006400]">PMB</Link>
+              <Link href="https://pmb.ukdw.ac.id/" className="block py-2 px-2 text-white rounded hover:bg-[#006400]">
+                PMB
+              </Link>
             </li>
             <li>
-              <Link href="/login" className="block rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#008000] shadow hover:bg-gray-100 transition mt-2">Login</Link>
+              {loggedIn ? (
+                <button onClick={handleLogout} className="block w-full rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#008000] shadow hover:bg-gray-100 transition mt-2 text-left" type="button">
+                  Logout
+                </button>
+              ) : (
+                <Link href="/login" className="block rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#008000] shadow hover:bg-gray-100 transition mt-2">
+                  Login
+                </Link>
+              )}
             </li>
           </ul>
         </div>
