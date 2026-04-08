@@ -64,7 +64,7 @@ function OTPInner() {
       document.cookie = `authToken=${res.data.token}; path=/; max-age=86400`;
       document.cookie = `role=ADMIN; path=/; max-age=86400`;
 
-      router.push("/admin/dashboard");
+      router.replace("/admin/dashboard");
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         setError(err.response?.data?.message || "OTP salah atau gagal.");

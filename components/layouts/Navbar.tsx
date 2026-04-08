@@ -33,12 +33,6 @@ const componentsBerita: { title: string; href: string }[] = [
   { title: "Berita Umum", href: "/berita-umum" },
 ];
 
-const componentsPMJD: { title: string; href: string }[] = [
-  { title: "Digital Literacy Test", href: "/digital-literacy-test" },
-  { title: "College Readiness Test", href: "/college-readiness-test" },
-  { title: "Hasil PMJD", href: "/hasil-pmjd" },
-];
-
 export function NavigationMenuDemo() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
