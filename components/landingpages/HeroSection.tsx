@@ -2,9 +2,11 @@
 import { API_BASE } from "@/lib/api";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function Hero() {
+  const router = useRouter();
   const [activeCount, setActiveCount] = useState<number>(0);
   const [graduateCount, setGraduateCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
@@ -33,6 +35,50 @@ export default function Hero() {
     fetchCounts();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const synth = window.speechSynthesis;
+    const text = "Selamat datang di Web Unit Layanan Disabilitas, tekan F jika ingin melihat statistik dan tekan J untuk ke halaman login";
+
+    synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "id-ID";
+    utterance.rate = Number(localStorage.getItem("tts:rate") || 1);
+    synth.speak(utterance);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+      const isTypingTarget = target?.isContentEditable || tagName === "input" || tagName === "textarea" || tagName === "select";
+
+      if (isTypingTarget) return;
+
+      const key = event.key.toLowerCase();
+
+      if (key === "f") {
+        event.preventDefault();
+        synth.cancel();
+        router.push("/statistik-mahasiswa");
+      }
+
+      if (key === "j") {
+        event.preventDefault();
+        synth.cancel();
+        router.push("/login");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      synth.cancel();
+    };
+  }, [router]);
+
   return (
     <section className="relative w-full min-h-[90vh] flex flex-col md:flex-row items-center justify-between bg-gradient-to-br from-[#43c458] via-[#049f04] to-[#2d8a3a] px-6 md:px-12 pt-24 md:pt-28 pb-12 overflow-hidden">
       <div className="absolute inset-0 overflow-hidden">
@@ -57,9 +103,12 @@ export default function Hero() {
             <p className="text-sm text-green-100">Graduates</p>
           </div>
         </div>
-        <Link href="/statistik-mahasiswa" className="group relative rounded-2xl bg-gradient-to-r from-white to-green-50 px-8 py-4 text-base font-bold text-[#008000] shadow-lg hover:scale-105 transition-all w-max">
-          View Statistics
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <Link href="/statistik-mahasiswa" className="group relative rounded-2xl bg-gradient-to-r from-white to-green-50 px-8 py-4 text-base font-bold text-[#008000] shadow-lg hover:scale-105 transition-all w-max">
+            View Statistics
+          </Link>
+        </div>
+        {error && <p className="mt-3 text-sm text-red-100">{error}</p>}
       </div>
     </section>
   );
