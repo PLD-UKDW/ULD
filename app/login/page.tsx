@@ -240,6 +240,14 @@ export default function LoginPage() {
     return () => clearTimeout(timeout);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
   /* ==========================
      SPEAK EACH CHARACTER WHEN TYPING
   ========================== */
@@ -418,7 +426,7 @@ export default function LoginPage() {
           await speakAndWait("Login berhasil. ... Anda akan dialihkan ke halaman admin.");
           router.push("/admin/dashboard");
         } else {
-          await speakAndWait("Login berhasil. ... Anda akan dialihkan ke dashboard.");
+          await speakAndWait("Login berhasil. ... Anda akan dialihkan ke halaman tes.");
           // window.location.href = "http://localhost:3000/dashboard/camaba";
           router.push("/dashboard/camaba");
         }
