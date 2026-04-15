@@ -28,7 +28,6 @@ const quillFormatsConfig = [
   "strike",
   "align",
   "list",
-  "bullet",
   "indent",
   "color",
   "background",
