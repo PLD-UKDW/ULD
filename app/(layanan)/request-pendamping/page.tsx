@@ -10,7 +10,7 @@ import {
   HelpCircle,
   ClipboardList,
   BookOpen,
-  Car,  
+  Car,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -29,9 +29,7 @@ export default function RequestPendampingPage() {
   return (
     <section className="relative w-full min-h-screen  bg-gradient-to-br from-green-900 via-emerald-900 to-green-800 text-white pt-32 pb-20 px-6 md:px-16 lg:px-24">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
-        {/* Left Content */}
         <div className="lg:col-span-2 space-y-12">
-          {/* Header */}
           <div>
             <h1 className="text-3xl md:text-5xl font-bold leading-tight mb-4 flex items-center gap-3 text-white">
               <Users className="w-8 h-8 text-white" />
@@ -46,7 +44,6 @@ export default function RequestPendampingPage() {
             </p>
           </div>
 
-          {/* Form CTA */}
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 shadow-lg border border-green-400/30 text-center">
             <FileText className="w-10 h-10 text-white mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-white mb-2">
@@ -67,7 +64,6 @@ export default function RequestPendampingPage() {
             </Link>
           </div>
 
-          {/* Syarat & Ketentuan */}
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 shadow-lg border border-green-400/30">
             <div className="flex items-center gap-2 mb-6">
               <CheckCircle className="w-6 h-6 text-white" />
@@ -93,7 +89,6 @@ export default function RequestPendampingPage() {
             </ul>
           </div>
 
-          {/* Bottom Info Cards */}
           <div className="grid md:grid-cols-3 gap-6">
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 shadow-lg border border-green-400/30 text-center">
               <Users className="w-8 h-8 text-white mx-auto mb-4" />
@@ -127,7 +122,6 @@ export default function RequestPendampingPage() {
           </div>
         </div>
 
-        {/* Right Sidebar */}
          <aside className="bg-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl border border-green-400/30">
           <h2 className="text-xl font-bold mb-6 text-[#A9C46C]">Layanan Lainnya</h2>
           <ul className="space-y-4">

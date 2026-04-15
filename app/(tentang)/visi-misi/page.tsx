@@ -3,14 +3,12 @@
 export default function VisiMisiPage() {
   return (
     <section className="relative min-h-screen bg-white py-24 px-6 md:px-16 overflow-hidden">
-      {/* Soft Decorative Accents */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-20 left-10 w-40 h-40 bg-[#3e4095]/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-20 right-20 w-60 h-60 bg-[#02a502]/10 rounded-full blur-3xl"></div>
         <div className="absolute top-1/3 right-1/3 w-64 h-64 bg-[#3e4095]/5 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Heading */}
       <div
         className="relative z-10 max-w-6xl mx-auto text-center mb-16 
         opacity-0 translate-y-8 motion-safe:animate-[fadeInUp_0.8s_ease-out_forwards]"
@@ -23,7 +21,6 @@ export default function VisiMisiPage() {
         </p>
       </div>
 
-      {/* ====== VISI ====== */}
       <div
         className="relative z-10 max-w-4xl mx-auto mb-16 p-8 rounded-2xl shadow-lg bg-white/70 
         backdrop-blur-sm border border-gray-100
@@ -40,7 +37,6 @@ export default function VisiMisiPage() {
         </p>
       </div>
 
-      {/* ====== MISI ====== */}
       <div
         className="relative z-10 max-w-4xl mx-auto mb-16 p-8 rounded-2xl shadow-lg bg-white/70 
         backdrop-blur-sm border border-gray-100
@@ -81,7 +77,6 @@ export default function VisiMisiPage() {
         </p>
       </div> */}
 
-      {/* Custom Keyframes */}
       <style>{`
         @keyframes fadeInUp {
           0% {

@@ -5,29 +5,17 @@ import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useTtsRate } from "@/lib/ttsRate";
 
-/* =====================================================
-   DASHBOARD CAMABA – ACCESSIBILITY & SCREEN READER FIRST
-===================================================== */
 
 export default function CamabaDashboardPage() {
   const router = useRouter();
 
-  /* ==========================
-     DATA STATE
-  ========================== */
   const [tests, setTests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  /* ==========================
-     ACCESSIBILITY STATE
-  ========================== */
   const [useTTS, setUseTTS] = useState(true);
   const [useKeyboardNav, setUseKeyboardNav] = useState(true);
   const [showAccessPopup, setShowAccessPopup] = useState(false);
 
-  /* ==========================
-     TTS SPEED CONTROL
-  ========================== */
   const [speechRate, setSpeechRate] = useTtsRate(1.1);
   const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
@@ -81,16 +69,10 @@ export default function CamabaDashboardPage() {
     };
   }, [getPreferredVoice]);
 
-  /* ==========================
-     NAVIGATION STATE
-  ========================== */
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [accessIndex, setAccessIndex] = useState(0);
   const [lastArrowLeftTime, setLastArrowLeftTime] = useState(0);
 
-  /* ==========================
-     ACCESS OPTIONS
-  ========================== */
   const accessOptions = [
     {
       id: "tts",
@@ -104,9 +86,6 @@ export default function CamabaDashboardPage() {
     },
   ];
 
-  /* =====================================================
-     🔊 SPEECH QUEUE ENGINE
-  ===================================================== */
   const speakQueue = (texts: string[], overrideRate?: number) => {
     if (!useTTS) return;
     if (!("speechSynthesis" in window)) return;
@@ -120,10 +99,6 @@ export default function CamabaDashboardPage() {
       window.speechSynthesis.speak(u);
     });
   };
-
-  /* =====================================================
-     🔊 SPEECH QUEUE WITH PROMISE
-  ===================================================== */
   const speakQueueAndWait = (texts: string[]): Promise<void> => {
     return new Promise((resolve) => {
       if (!useTTS || !("speechSynthesis" in window)) {
@@ -151,9 +126,6 @@ export default function CamabaDashboardPage() {
     });
   };
 
-  /* =====================================================
-     CHANGE SPEECH SPEED
-  ===================================================== */
   const changeSpeed = (delta: number) => {
     setSpeechRate((prev) => {
       const next = Math.min(2, Math.max(0.5, prev + delta));
@@ -165,9 +137,6 @@ export default function CamabaDashboardPage() {
     });
   };
 
-  /* ==========================
-     AUTH + FETCH TEST
-  ========================== */
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -190,9 +159,6 @@ export default function CamabaDashboardPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  /* =====================================================
-     INTRO + POPUP
-  ===================================================== */
   useEffect(() => {
     if (loading) return;
 
@@ -309,14 +275,10 @@ export default function CamabaDashboardPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [showAccessPopup, accessIndex, tests]);
 
-  /* =====================================================
-     DASHBOARD KEYBOARD NAV
-  ===================================================== */
   useEffect(() => {
     if (!useTTS || !useKeyboardNav || showAccessPopup || !tests.length) return;
 
     const handler = async (e: KeyboardEvent) => {
-      /* SPEED CONTROL */
       if (e.shiftKey && e.code === "ArrowUp") {
         e.preventDefault();
         changeSpeed(0.1);
@@ -329,7 +291,6 @@ export default function CamabaDashboardPage() {
         return;
       }
 
-      /* DOUBLE LEFT FOR INSTRUCTION */
       if (e.code === "ArrowLeft") {
         const now = Date.now();
 
@@ -401,9 +362,6 @@ export default function CamabaDashboardPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [useTTS, useKeyboardNav, tests, selectedIndex, showAccessPopup, lastArrowLeftTime]);
 
-  /* ==========================
-     UI
-  ========================== */
   if (loading) return <p className="px-4 pt-24 text-black text-lg sm:px-6 sm:pt-28 sm:text-xl">Memuat...</p>;
 
   return (
@@ -427,14 +385,12 @@ export default function CamabaDashboardPage() {
         </div>
       )}
 
-      {/* HEADER */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold leading-tight sm:text-3xl lg:text-4xl">Halaman Tes Calon Mahasiswa</h1>
       </div>
 
       {!useTTS && <p className="mb-4 text-base text-black sm:text-lg lg:text-xl">Klik tombol pada kartu tes untuk memulai atau melihat hasil.</p>}
 
-      {/* LIST TES */}
       <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
         {tests.map((t, idx) => (
           <div key={t.id} className={`rounded-xl border bg-white p-4 shadow sm:p-6 ${useTTS && idx === selectedIndex ? "outline outline-3 outline-green-600" : ""}`}>
@@ -455,7 +411,6 @@ export default function CamabaDashboardPage() {
         ))}
       </div>
 
-      {/* FLOATING SPEED CONTROL */}
       {useTTS && !showAccessPopup && (
         <div className="fixed bottom-6 right-6 bg-white shadow-xl border rounded-xl p-4 flex flex-col gap-3 items-center">
           <p className="text-sm font-semibold text-black">Kecepatan Suara</p>

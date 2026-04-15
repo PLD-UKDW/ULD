@@ -2,12 +2,25 @@
 import api from "@/lib/api";
 import { useCallback, useEffect, useState } from "react";
 
+type JenisOption = { id: number; jenis: string };
+type KategoriItem = {
+    id: number;
+    kategori: string;
+    jenis_disabilitas_id: number | null;
+    jenisDisabilitas?: { id: number; jenis: string } | null;
+};
+
 export default function KategoriDisabilitasPage() {
     const [token, setToken] = useState<string | null>(null);
-    const [jenisOptions, setJenisOptions] = useState<{ id: number; jenis: string }[]>([]);
-    const [kategoriList, setKategoriList] = useState<string[]>([]);
+    const [jenisOptions, setJenisOptions] = useState<JenisOption[]>([]);
+    const [kategoriList, setKategoriList] = useState<KategoriItem[]>([]);
     const [newKategori, setNewKategori] = useState<{ kategori: string; jenisId: number | "" }>({ kategori: "", jenisId: "" });
     const [saving, setSaving] = useState(false);
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [editKategori, setEditKategori] = useState("");
+    const [editJenisId, setEditJenisId] = useState<number | "">("");
+    const [updating, setUpdating] = useState(false);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
     const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
     useEffect(() => {
@@ -34,7 +47,7 @@ export default function KategoriDisabilitasPage() {
     const fetchKategori = useCallback(async () => {
         if (!token) return;
         try {
-            const res = await api.get("/api/kategori-disabilitas", {
+            const res = await api.get("/api/kategori-disabilitas-admin", {
                 headers: { Authorization: `Bearer ${token}` },
             });
             setKategoriList(res.data || []);
@@ -86,6 +99,87 @@ export default function KategoriDisabilitasPage() {
         }
     };
 
+    const startEdit = (item: KategoriItem) => {
+        setEditingId(item.id);
+        setEditKategori(item.kategori);
+        setEditJenisId(item.jenis_disabilitas_id || "");
+    };
+
+    const cancelEdit = () => {
+        setEditingId(null);
+        setEditKategori("");
+        setEditJenisId("");
+    };
+
+    const handleUpdate = async (id: number) => {
+        if (!token) {
+            addToast("Token tidak ada / belum login", "error");
+            return;
+        }
+        if (!editKategori.trim() || !editJenisId) {
+            addToast("Nama kategori dan jenis wajib diisi", "error");
+            return;
+        }
+
+        setUpdating(true);
+        try {
+            const res = await fetch(`http://localhost:4000/api/kategori-disabilitas/${id}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ kategori: editKategori.trim(), jenis_id: editJenisId }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                addToast(body?.message || "Gagal update kategori", "error");
+                return;
+            }
+
+            addToast(body?.message || "Kategori berhasil diupdate", "success");
+            cancelEdit();
+            fetchKategori();
+        } catch {
+            addToast("Error saat update kategori", "error");
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const handleDelete = async (id: number) => {
+        if (!token) {
+            addToast("Token tidak ada / belum login", "error");
+            return;
+        }
+
+        const yes = window.confirm("Yakin ingin menghapus kategori ini?");
+        if (!yes) return;
+
+        setDeletingId(id);
+        try {
+            const res = await fetch(`http://localhost:4000/api/kategori-disabilitas/${id}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                addToast(body?.message || "Gagal menghapus kategori", "error");
+                return;
+            }
+
+            addToast(body?.message || "Kategori berhasil dihapus", "success");
+            if (editingId === id) {
+                cancelEdit();
+            }
+            fetchKategori();
+        } catch {
+            addToast("Error saat menghapus kategori", "error");
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
     return (
         <div className="p-6 max-w-4xl mx-auto text-black">
             <h1 className="text-2xl font-bold mb-4">Kategori Disabilitas</h1>
@@ -133,11 +227,94 @@ export default function KategoriDisabilitasPage() {
                 {kategoriList.length === 0 ? (
                     <p className="text-sm text-gray-600">Belum ada kategori.</p>
                 ) : (
-                    <ul className="list-disc pl-6 space-y-1">
-                        {kategoriList.map((k) => (
-                            <li key={k}>{k}</li>
-                        ))}
-                    </ul>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full table-auto">
+                            <thead>
+                                <tr className="bg-gray-100 text-left">
+                                    <th className="px-3 py-2">Kategori</th>
+                                    <th className="px-3 py-2">Jenis</th>
+                                    <th className="px-3 py-2">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {kategoriList.map((item) => {
+                                    const isEditing = editingId === item.id;
+                                    return (
+                                        <tr key={item.id} className="border-t">
+                                            <td className="px-3 py-2">
+                                                {isEditing ? (
+                                                    <input
+                                                        value={editKategori}
+                                                        onChange={(e) => setEditKategori(e.target.value)}
+                                                        className="w-full border rounded p-2"
+                                                    />
+                                                ) : (
+                                                    item.kategori
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-2">
+                                                {isEditing ? (
+                                                    <select
+                                                        value={editJenisId}
+                                                        onChange={(e) => setEditJenisId(e.target.value ? Number(e.target.value) : "")}
+                                                        className="w-full border rounded p-2"
+                                                    >
+                                                        <option value="">-- pilih jenis --</option>
+                                                        {jenisOptions.map((j) => (
+                                                            <option key={j.id} value={j.id}>{j.jenis}</option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    item.jenisDisabilitas?.jenis || "-"
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-2">
+                                                <div className="flex gap-2">
+                                                    {isEditing ? (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleUpdate(item.id)}
+                                                                disabled={updating}
+                                                                className="rounded bg-blue-600 px-3 py-1 text-white hover:bg-blue-700 disabled:opacity-60"
+                                                            >
+                                                                {updating ? "Menyimpan..." : "Simpan"}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={cancelEdit}
+                                                                className="rounded border px-3 py-1 hover:bg-gray-100"
+                                                            >
+                                                                Batal
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => startEdit(item)}
+                                                                className="rounded bg-yellow-500 px-3 py-1 text-white hover:bg-yellow-600"
+                                                            >
+                                                                Update
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDelete(item.id)}
+                                                                disabled={deletingId === item.id}
+                                                                className="rounded bg-red-600 px-3 py-1 text-white hover:bg-red-700 disabled:opacity-60"
+                                                            >
+                                                                {deletingId === item.id ? "Menghapus..." : "Delete"}
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
 

@@ -11,9 +11,9 @@ type A11yState = {
   dyslexia: boolean;
   colorblind: "none" | "rg" | "by" | "mono";
   ttsEnabled?: boolean;
-  ttsRate?: number; // 0.5 - 2.0
-  ttsPitch?: number; // 0.8 - 1.2
-  ttsVoiceName?: string; // chosen voice name
+  ttsRate?: number;
+  ttsPitch?: number;
+  ttsVoiceName?: string;
   keyboardNavEnabled?: boolean;
 };
 
@@ -109,11 +109,9 @@ export default function AccessibilityToolbar() {
     const handler = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
 
-      // Double-shift detection for accessibility shortcuts
       if (e.key === "Shift" && !e.repeat) {
         const now = Date.now();
         if (now - lastShiftPress < 500) {
-          // Double shift detected
           e.preventDefault();
           if (!isAdminRoute) {
             window.dispatchEvent(new CustomEvent("tts-say", { detail: { text: a11yShortcutHelpText } }));
@@ -125,7 +123,6 @@ export default function AccessibilityToolbar() {
         return;
       }
 
-      // F5: Announce shift reminder
       if (e.key === "F5" && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
         const target = e.target as HTMLElement | null;
         const targetTag = target?.tagName;
@@ -138,7 +135,6 @@ export default function AccessibilityToolbar() {
         }
       }
 
-      // Shift+Z: Cycle through zoom levels
       if (e.shiftKey && key === "z" && !e.ctrlKey && !e.altKey && !e.metaKey) {
         const target = e.target as HTMLElement | null;
         const targetTag = target?.tagName;
@@ -158,7 +154,6 @@ export default function AccessibilityToolbar() {
         }
       }
 
-      // Alt+Shift shortcuts
       if (e.altKey && e.shiftKey) {
         if (key === "a") {
           e.preventDefault();
@@ -190,7 +185,6 @@ export default function AccessibilityToolbar() {
     return () => window.removeEventListener("keydown", handler);
   }, [isExcludedRoute, isAdminRoute, state.ttsEnabled, state.ttsRate, state.ttsPitch, state.ttsVoiceName, voices, lastShiftPress, a11yShortcutHelpText]);
 
-  // Reset accessibility features via custom event
   useEffect(() => {
     if (isExcludedRoute) {
       return;
@@ -204,7 +198,6 @@ export default function AccessibilityToolbar() {
     };
   }, [isExcludedRoute]);
 
-  // Load available voices for Speech Synthesis
   useEffect(() => {
     if (isExcludedRoute) {
       return;
@@ -213,7 +206,6 @@ export default function AccessibilityToolbar() {
     const loadVoices = () => {
       const v = window.speechSynthesis.getVoices();
       setVoices(v);
-      // Auto-pick Indonesian voice if available
       if (!state.ttsVoiceName && v.length > 0) {
         const idVoice = v.find((voice) => /id|indones/i.test(voice.lang));
         const defaultVoice = idVoice || v[0];
@@ -227,7 +219,6 @@ export default function AccessibilityToolbar() {
     };
   }, [isExcludedRoute, state.ttsVoiceName]);
 
-  // Click-to-speak handler when TTS is enabled, and programmatic TTS via custom event
   useEffect(() => {
     if (isExcludedRoute) {
       return;
@@ -237,7 +228,6 @@ export default function AccessibilityToolbar() {
       if (!state.ttsEnabled || isAdminRoute) return;
       const target = e.target as HTMLElement | null;
       if (!target) return;
-      // Ignore clicks inside the toolbar
       const toolbarEl = document.querySelector(`.${toolbarRole}`) as HTMLElement | null;
       if (toolbarEl && (target === toolbarEl || toolbarEl.contains(target))) return;
 
@@ -263,17 +253,14 @@ export default function AccessibilityToolbar() {
   }
 
   function extractReadableText(el: HTMLElement): string {
-    // Prefer explicit TTS text on target or nearest ancestors
     let cur: HTMLElement | null = el;
     for (let i = 0; i < 6 && cur; i += 1) {
-      // If an ancestor opts out of TTS, stop
       const ignore = cur.getAttribute("data-tts-ignore") || "";
       if (ignore === "true") return "";
       const tts = cur.getAttribute("data-tts-text") || "";
       if (tts.trim().length > 0) return tts.trim();
       cur = cur.parentElement as HTMLElement | null;
     }
-    // Helper: check if element is interactive
     const interactiveTags = new Set(["BUTTON", "A", "INPUT", "SELECT", "TEXTAREA", "OPTION", "SUMMARY", "LABEL"]);
     const interactiveRoles = new Set(["button", "link", "menuitem", "checkbox", "radio", "switch", "tab"]);
     const isInteractive = (node: HTMLElement | null): boolean => {
@@ -286,7 +273,6 @@ export default function AccessibilityToolbar() {
       if (node.isContentEditable) return true;
       return false;
     };
-    // Special-case native selects/options: only read selected option
     if (el.tagName === "SELECT") {
       const sel = el as HTMLSelectElement;
       const opt = sel.selectedOptions && sel.selectedOptions.length > 0 ? sel.selectedOptions[0] : sel.options[sel.selectedIndex];
@@ -297,15 +283,11 @@ export default function AccessibilityToolbar() {
       const txt = (el.textContent || "").trim();
       if (txt.length > 0) return txt.slice(0, 2000);
     }
-    // Allow reading textual elements (p, span, headings, list items, labels) even if not interactive,
-    // but block generic containers like divs
     const textTags = new Set(["P", "SPAN", "LI", "LABEL", "H1", "H2", "H3", "H4", "H5", "H6"]);
     if (!isInteractive(el) && !textTags.has(el.tagName)) return "";
-    // Otherwise prefer aria-label or alt
     const aria = el.getAttribute("aria-label") || "";
     const alt = (el as HTMLImageElement).alt || "";
     const candidate = (aria || alt || el.textContent || "").trim();
-    // Limit length to avoid reading huge blocks accidentally
     const text = candidate.replace(/\s+/g, " ").trim();
     if (text.length < 2) return "";
     return text.slice(0, 2000);
@@ -319,7 +301,6 @@ export default function AccessibilityToolbar() {
   function speak(text: string) {
     if (!("speechSynthesis" in window)) return;
     setPaused(false);
-    // Cancel any current utterance
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     const rate = clamp(Number(state.ttsRate ?? 1), 0.5, 2);
@@ -331,7 +312,6 @@ export default function AccessibilityToolbar() {
       utter.voice = voice;
       utter.lang = voice.lang;
     } else {
-      // Hint language to improve pitch/rate consistency
       utter.lang = "id-ID";
     }
     utter.onstart = () => {
@@ -398,12 +378,10 @@ export default function AccessibilityToolbar() {
   }
 
   function resetSettings() {
-    // Stop any ongoing TTS
     if (speaking) {
       stopSpeaking();
     }
 
-    // Reset to default state
     const prefersReduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const defaultState: A11yState = {
       contrast: "default",
@@ -515,7 +493,6 @@ export default function AccessibilityToolbar() {
             </div>
           )}
 
-          {/* Keyboard Navigation */}
           <div className="mb-3 border-b pb-3">
             <div className="font-semibold flex items-center justify-between">
               <span>Navigasi Keyboard</span>

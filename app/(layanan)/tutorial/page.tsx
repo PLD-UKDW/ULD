@@ -48,7 +48,6 @@ export default function TutorialPage() {
   return (
     <section className="relative w-full min-h-screen bg-gradient-to-br from-green-900 via-emerald-900 to-green-800 text-white pt-32 pb-20 px-6 md:px-16 lg:px-24">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
-        {/* Left Content */}
         <div className="lg:col-span-2 space-y-10">
           <div>
             <h1 className="text-3xl md:text-5xl font-bold leading-tight mb-4 text-white">
@@ -68,7 +67,6 @@ export default function TutorialPage() {
             </p>
           </div>
 
-          {/* Prosedur */}
           <div>
             <h2 className="text-2xl font-bold mb-6 text-white">
               Prosedur Pengajuan
@@ -92,7 +90,6 @@ export default function TutorialPage() {
           </div>
         </div>
 
-        {/* Right Sidebar */}
         <aside className="bg-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl border border-white/20">
           <h2 className="text-xl font-bold mb-6 text-[#A9C46C]">
             Layanan Lainnya

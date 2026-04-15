@@ -22,7 +22,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/dashboard/camaba")) {
+  if (pathname.startsWith("/dashboard")) {
     if (!authToken) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
@@ -33,5 +33,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/otp/:path*", "/admin/:path*", "/dashboard/camaba/:path*"],
+  matcher: ["/otp/:path*", "/admin/:path*", "/dashboard/:path*"],
 };

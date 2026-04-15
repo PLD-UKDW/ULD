@@ -1,15 +1,9 @@
-"use client";
 
 import { useCallback, useEffect, useState } from "react";
 
 const hasSpeech = typeof window !== "undefined" && "speechSynthesis" in window;
 const synth = hasSpeech && typeof window !== "undefined" ? ((window as any).speechSynthesis as SpeechSynthesis) : null;
 
-// ============================================
-// SPEED PRESETS DAN HELPER FUNCTIONS
-// ============================================
-
-// Preset kecepatan untuk kemudahan akses
 export const SPEED_PRESETS = {
   "sangat-lambat": { rate: 0.5, label: "Sangat Lambat" },
   lambat: { rate: 0.75, label: "Lambat" },
@@ -20,7 +14,6 @@ export const SPEED_PRESETS = {
 
 export type SpeedPreset = keyof typeof SPEED_PRESETS;
 
-// Fungsi untuk mendapatkan label kecepatan berdasarkan nilai rate
 export function getSpeedLabel(rate: number): string {
   if (rate <= 0.6) return "Sangat Lambat";
   if (rate <= 0.85) return "Lambat";
@@ -29,7 +22,6 @@ export function getSpeedLabel(rate: number): string {
   return "Sangat Cepat";
 }
 
-// Fungsi untuk mendapatkan preset terdekat
 export function getNearestPreset(rate: number): SpeedPreset {
   if (rate <= 0.6) return "sangat-lambat";
   if (rate <= 0.85) return "lambat";
@@ -37,10 +29,6 @@ export function getNearestPreset(rate: number): SpeedPreset {
   if (rate <= 1.35) return "cepat";
   return "sangat-cepat";
 }
-
-// ============================================
-// SPEECH FUNCTIONS
-// ============================================
 
 export function speak(text: string, options?: { lang?: string; rate?: number; pitch?: number; voiceURI?: string }) {
   if (!synth) return;
@@ -79,7 +67,6 @@ export function resume() {
   if (synth && synth.paused) synth.resume();
 }
 
-// Fungsi untuk mengubah kecepatan dan memberikan feedback audio
 export function setSpeed(rate: number, announceFeedback = true) {
   if (typeof window === "undefined") return;
   localStorage.setItem("tts:rate", String(rate));
@@ -87,14 +74,12 @@ export function setSpeed(rate: number, announceFeedback = true) {
   
   if (announceFeedback && synth) {
     const label = getSpeedLabel(rate);
-    // Feedback audio dengan kecepatan baru
     setTimeout(() => {
       speak(`Kecepatan ${label}`, { rate });
     }, 100);
   }
 }
 
-// Fungsi untuk menaikkan kecepatan
 export function increaseSpeed() {
   if (typeof window === "undefined") return;
   const currentRate = Number(localStorage.getItem("tts:rate") || 1);
@@ -103,7 +88,6 @@ export function increaseSpeed() {
   return newRate;
 }
 
-// Fungsi untuk menurunkan kecepatan
 export function decreaseSpeed() {
   if (typeof window === "undefined") return;
   const currentRate = Number(localStorage.getItem("tts:rate") || 1);
@@ -111,10 +95,6 @@ export function decreaseSpeed() {
   setSpeed(newRate);
   return newRate;
 }
-
-// ============================================
-// TTS CONTROL COMPONENT
-// ============================================
 
 export default function TTSControl() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -124,17 +104,14 @@ export default function TTSControl() {
   const [statusMessage, setStatusMessage] = useState<string>("TTS siap.");
   const [activePreset, setActivePreset] = useState<SpeedPreset>("normal");
 
-  // Handle speed preset change
   const handlePresetChange = useCallback((preset: SpeedPreset) => {
     const { rate: newRate } = SPEED_PRESETS[preset];
     setRate(newRate);
     setActivePreset(preset);
     localStorage.setItem("tts:rate", String(newRate));
-    // Berikan feedback audio
     speak(`Kecepatan ${SPEED_PRESETS[preset].label}`, { rate: newRate });
   }, []);
 
-  // Handle manual rate change
   const handleRateChange = useCallback((newRate: number) => {
     setRate(newRate);
     setActivePreset(getNearestPreset(newRate));
@@ -154,13 +131,11 @@ export default function TTSControl() {
 
     const load = () => {
       const allVoices = synth.getVoices();
-      // Prioritaskan suara Indonesia, lalu urutkan berdasarkan nama
       const indonesianVoices = allVoices.filter((v) => v.lang.startsWith("id"));
       const otherVoices = allVoices.filter((v) => !v.lang.startsWith("id"));
       const sortedVoices = [...indonesianVoices, ...otherVoices];
       setVoices(sortedVoices);
 
-      // Auto-select suara Indonesia jika tersedia dan belum ada pilihan
       if (sortedVoices.length && !selected && !initVoice) {
         const indonesianVoice = sortedVoices.find((v) => v.lang.startsWith("id"));
         const defaultVoice = indonesianVoice ?? sortedVoices[0];
@@ -190,7 +165,6 @@ export default function TTSControl() {
     };
   }, []);
 
-  // Cek apakah ada suara Indonesia yang tersedia
   const hasIndonesianVoice = voices.some((v) => v.lang.startsWith("id"));
 
   if (!synth) return <div className="p-2 text-sm text-gray-600">TTS tidak tersedia di browser ini.</div>;
@@ -233,13 +207,9 @@ export default function TTSControl() {
         )}
       </select>
 
-      {/* ============================================
-          KONTROL KECEPATAN SUARA - AKSESIBEL
-          ============================================ */}
       <fieldset className="mt-4 p-3 border rounded-lg bg-blue-50">
         <legend className="text-sm font-semibold text-blue-800 px-2">🎚️ Kecepatan Suara</legend>
         
-        {/* Preset Buttons untuk akses cepat */}
         <div className="mt-2">
           <div className="text-xs text-gray-600 mb-2">Pilih kecepatan cepat:</div>
           <div className="flex flex-wrap gap-1" role="radiogroup" aria-label="Pilih kecepatan suara">
@@ -263,7 +233,6 @@ export default function TTSControl() {
           </div>
         </div>
 
-        {/* Tombol +/- untuk penyesuaian halus */}
         <div className="flex items-center gap-2 mt-3">
           <button
             type="button"
@@ -299,7 +268,6 @@ export default function TTSControl() {
           </button>
         </div>
 
-        {/* Slider untuk kontrol presisi */}
         <div className="mt-3">
           <label htmlFor="speed-slider" className="text-xs text-gray-600 block mb-1">
             Atur kecepatan manual (0.5x - 2x):
@@ -326,7 +294,6 @@ export default function TTSControl() {
           </div>
         </div>
 
-        {/* Tombol test kecepatan */}
         <button
           type="button"
           onClick={() => speak(`Ini adalah contoh suara dengan kecepatan ${getSpeedLabel(rate)}`, { voiceURI: selected ?? undefined, rate })}
@@ -371,7 +338,6 @@ export default function TTSControl() {
         </button>
       </div>
 
-      {/* Tips aksesibilitas */}
       <div className="mt-4 p-2 bg-gray-100 rounded text-xs text-gray-600">
         <div className="font-semibold mb-1">💡 Tips Aksesibilitas:</div>
         <ul className="list-disc list-inside space-y-1">

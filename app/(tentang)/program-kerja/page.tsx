@@ -19,11 +19,9 @@ export default function ProgramKerjaPage() {
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 py-20 px-6 md:px-16 overflow-hidden pt-30">
       <div className="max-w-7xl mx-auto px-6 py-16">
-        {/* Header */}
         <div className="text-center mb-16 -mt-25">
           <h1 className="text-4xl md:text-5xl font-bold text-[#3e4095] mb-1 leading-tight tracking-tight mt-10">Program Kerja</h1>
         </div>
-        {/* Main Description */}
         <div className="bg-green-400/20 backdrop-blur-sm rounded-lg p-8 mb-12">
           <p className="text-gray-700 text-lg leading-relaxed mb-6">
             Program kerja utama Unit Layanan Disabilitas Universitas Kristen Duta Wacana mencakup berbagai kegiatan untuk mendukung layanan inklusi bagi mahasiswa, dosen, dan tenaga kependidikan.
@@ -32,7 +30,6 @@ export default function ProgramKerjaPage() {
           <p className="text-gray-700 text-lg leading-relaxed">Berikut adalah daftar lengkap program kerja ULD UKDW sepanjang periode berjalan:</p>
         </div>
 
-        {/* Program Kerja Lengkap */}
         <div className="bg-white/5 backdrop-blur-sm rounded-lg p-8 mb-12">
           <div className="space-y-4">
             {programKerjaLengkap.map((item, index) => (
@@ -44,7 +41,6 @@ export default function ProgramKerjaPage() {
           </div>
         </div>
 
-        {/* Closing Statement */}
         <div className="bg-gradient-to-r from-green-400/20 to-emerald-500/20 backdrop-blur-sm rounded-lg p-8 border border-green-400/30">
           <p className="text-gray-700 text-lg leading-relaxed text-center">ULD UKDW terus mengembangkan kegiatan dan layanan untuk mendukung terciptanya lingkungan kampus yang inklusif, humanis, dan ramah bagi penyandang disabilitas.</p>
         </div>

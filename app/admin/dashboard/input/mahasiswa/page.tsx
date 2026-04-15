@@ -407,7 +407,6 @@ export default function MahasiswaForm() {
 
             setEditingId(row.id);
 
-            // Load prodi list if fakultas is selected
             if (data.fakultas_id) {
                 const prodiRes = await fetch(`http://localhost:4000/api/prodi?fakultas_id=${data.fakultas_id}`, {
                     headers: {
@@ -502,7 +501,6 @@ export default function MahasiswaForm() {
     };
 
     const exportExcel = () => {
-        // Attempt to use SheetJS if available on the project. If not, fallback to CSV with .xlsx extension (not ideal).
         if (typeof window === "undefined") return;
 
     const XLSXAny = window.XLSX as { utils?: any; writeFile?: any };
@@ -510,13 +508,11 @@ export default function MahasiswaForm() {
         if (XLSXAny?.utils && XLSXAny?.writeFile) {
             const ws_data: (string | number)[][] = [];
 
-            // Header row - include all visible columns
             ws_data.push([
             'NIM', 'Nama', 'Gender', 'Provinsi', 'Jenis Disabilitas', 'Kategori Disabilitas',
             'Fakultas', 'Prodi', 'Angkatan', 'Status'
             ]);
 
-            // Data rows - use filtered/displayed rows
             for (const r of rows) {
                 ws_data.push([
                     r.nim,
@@ -535,7 +531,6 @@ export default function MahasiswaForm() {
             const wb = XLSXAny.utils.book_new();
             const ws = XLSXAny.utils.aoa_to_sheet(ws_data);
 
-            // Add borders to all cells
             const range = XLSXAny.utils.decode_range(ws['!ref']);
             for (let R = range.s.r; R <= range.e.r; ++R) {
                 for (let C = range.s.c; C <= range.e.c; ++C) {
@@ -550,7 +545,6 @@ export default function MahasiswaForm() {
                         right: { style: 'thin', color: { rgb: '000000' } }
                     };
 
-                    // Bold header row
                     if (R === 0) {
                         if (!ws[cellAddress].s.font) ws[cellAddress].s.font = {};
                         ws[cellAddress].s.font.bold = true;
@@ -558,7 +552,6 @@ export default function MahasiswaForm() {
                 }
             }
 
-            // Set column widths
             ws['!cols'] = [
                 { wch: 15 }, // NIM
                 { wch: 35 }, // Nama
@@ -591,13 +584,11 @@ export default function MahasiswaForm() {
         }
     };
 
-    // jenisDisabilitas ditentukan oleh backend; tidak perlu compute di frontend
 
     return (
         <div className="p-6 max-w-6xl mx-auto text-black">
             <h1 className="text-2xl font-bold mb-4">Form Data Mahasiswa</h1>
 
-            {/* Form */}
             <form onSubmit={handleSave} className="bg-white p-6 rounded-lg shadow mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
@@ -721,7 +712,6 @@ export default function MahasiswaForm() {
 
             </form>
 
-            {/* Controls: search / filters / export */}
             <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
                     <input placeholder="Cari nama atau NIM" value={search} onChange={(e) => setSearch(e.target.value)} className="border rounded p-2" />
@@ -752,7 +742,6 @@ export default function MahasiswaForm() {
                 </div>
             </div>
 
-            {/* Table */}
             <div className="bg-white rounded shadow overflow-x-auto">
                 <table className="min-w-full table-auto">
                     <thead>
@@ -799,7 +788,6 @@ export default function MahasiswaForm() {
                 </table>
             </div>
 
-            {/* Pagination (simple) */}
             <div className="mt-4 flex items-center justify-between">
                 <div>Page {currentPage} of {totalPages}</div>
                 <div className="flex gap-2">
@@ -808,7 +796,6 @@ export default function MahasiswaForm() {
                 </div>
             </div>
 
-            {/* Toasts */}
             <div className="fixed right-4 bottom-4 flex flex-col gap-2">
                 {toasts.map(t => (
                     <div key={t.id} className={`px-4 py-2 rounded shadow text-white ${t.type === 'error' ? 'bg-red-500' : t.type === 'success' ? 'bg-green-500' : 'bg-gray-700'}`}>

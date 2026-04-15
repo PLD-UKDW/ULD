@@ -38,9 +38,6 @@ export default function TestResultPage() {
     });
   };
 
-  /* =====================================================
-     🔊 SPEECH QUEUE WITH PROMISE (WAIT UNTIL FINISH)
-  ===================================================== */
   const speakQueueAndWait = (texts: string[], rate?: number): Promise<void> => {
     return new Promise((resolve) => {
       if (!useTTS || !("speechSynthesis" in window)) {
@@ -61,7 +58,6 @@ export default function TestResultPage() {
         u.lang = "id-ID";
         u.rate = currentRate;
 
-        // Resolve when the last utterance ends
         if (index === texts.length - 1) {
           u.onend = () => resolve();
           u.onerror = () => resolve();
@@ -72,7 +68,6 @@ export default function TestResultPage() {
     });
   };
 
-  // Fetch result data
   const fetchResult = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token || !attemptId) return;
@@ -87,7 +82,6 @@ export default function TestResultPage() {
     }
   }, [id, attemptId]);
 
-  // Initial fetch + test info
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -112,15 +106,10 @@ export default function TestResultPage() {
     return () => clearInterval(interval);
   }, [fetchResult]);
 
-  /* =====================================================
-     TTS: Bacakan hasil saat data tersedia
-  ===================================================== */
   useEffect(() => {
     if (!attempt || !test || hasSpoken || !useTTS) return;
 
-    // Delay untuk memastikan TTS halaman sebelumnya sudah selesai
     const timeout = setTimeout(() => {
-      // Pastikan tidak ada TTS yang berjalan dari halaman sebelumnya
       window.speechSynthesis.cancel();
 
       const texts: string[] = [];
@@ -148,14 +137,12 @@ export default function TestResultPage() {
     return () => clearTimeout(timeout);
   }, [attempt, test, hasSpoken, useTTS, speechRate, displayedScore]);
 
-  // Fungsi untuk mengubah kecepatan
   const changeSpeed = useCallback(
     (delta: number) => {
       if (!useTTS) return;
 
       const newRate = setSpeechRate((prev) => Math.max(0.5, Math.min(2, prev + delta)));
 
-      // Feedback audio
       window.speechSynthesis.cancel();
       const label = getSpeedLabel(newRate);
       speakQueue([`Kecepatan ${label}`], newRate);
@@ -163,7 +150,6 @@ export default function TestResultPage() {
     [setSpeechRate, useTTS],
   );
 
-  // Fungsi untuk membacakan ulang hasil
   const replayResult = useCallback(() => {
     if (!useTTS || !attempt || !test) return;
 
@@ -187,12 +173,8 @@ export default function TestResultPage() {
     speakQueue(texts);
   }, [useTTS, attempt, test, displayedScore]);
 
-  /* =====================================================
-     KEYBOARD NAVIGATION
-  ===================================================== */
   useEffect(() => {
     const handler = async (e: KeyboardEvent) => {
-      // Abaikan jika sedang mengetik di input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       switch (e.code) {

@@ -5,13 +5,11 @@ import { CheckCircle2 } from "lucide-react";
 export default function TujuanSasaranPage() {
   return (
     <section className="relative min-h-screen bg-white py-24 px-6 md:px-16 overflow-hidden">
-      {/* Decorative Accents */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-24 left-10 w-40 h-40 bg-[#3e4095]/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-20 right-20 w-64 h-64 bg-[#02a502]/10 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Header */}
       <div
         className="relative z-10 max-w-6xl mx-auto text-center mb-16
         opacity-0 translate-y-8 motion-safe:animate-[fadeInUp_0.8s_ease-out_forwards]"
@@ -24,7 +22,6 @@ export default function TujuanSasaranPage() {
         </p>
       </div>
 
-      {/* ==== TUJUAN ==== */}
       <div
         className="relative z-10 max-w-5xl mx-auto mb-16 p-10 rounded-2xl shadow-lg bg-white/70 
         backdrop-blur-sm border border-gray-100
@@ -35,7 +32,6 @@ export default function TujuanSasaranPage() {
         </h2>
 
         <div className="space-y-6">
-          {/* Item */}
           <div className="flex gap-4 items-start">
             <CheckCircle2 className="w-7 h-7 text-[#02a502] mt-1" />
             <div>
@@ -78,7 +74,6 @@ export default function TujuanSasaranPage() {
         </div>
       </div>
 
-      {/* ==== SASARAN ==== */}
       <div
         className="relative z-10 max-w-5xl mx-auto p-10 rounded-2xl shadow-lg bg-white/70 
         backdrop-blur-sm border border-gray-100
@@ -126,7 +121,6 @@ export default function TujuanSasaranPage() {
         </ul>
       </div>
 
-      {/* Custom Keyframes */}
       <style>{`
         @keyframes fadeInUp {
           0% { opacity: 0; transform: translateY(20px); }

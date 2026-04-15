@@ -163,7 +163,6 @@ export default function CreateTestPage() {
       console.log("Create test response:", res.data);
       addToast("Test berhasil dibuat!", "success");
 
-      // Redirect ke halaman pmjd setelah 1 detik
       setTimeout(() => {
         router.push("/admin/dashboard/input/pmjd");
       }, 1000);

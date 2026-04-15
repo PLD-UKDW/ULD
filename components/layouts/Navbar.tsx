@@ -1,12 +1,12 @@
 "use client";
 
 import { NavigationMenu, NavigationMenuContent, NavigationMenuItem, NavigationMenuLink, NavigationMenuList, NavigationMenuTrigger } from "@/components/ui/navigation-menu";
+import { isLoggedIn } from "@/lib/auth";
 import { Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { isLoggedIn } from "@/lib/auth";
 
 const componentsTentang: { title: string; href: string; description?: string }[] = [
   { title: "Sejarah", href: "/sejarah" },
@@ -36,13 +36,44 @@ const componentsBerita: { title: string; href: string }[] = [
 export function NavigationMenuDemo() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [profileInitial, setProfileInitial] = useState("U");
+  const [dashboardHref, setDashboardHref] = useState("/dashboard/camaba");
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    setLoggedIn(isLoggedIn());
+    const syncAuthStatus = () => {
+      const loginState = isLoggedIn();
+      setLoggedIn(loginState);
 
-    const syncAuthStatus = () => setLoggedIn(isLoggedIn());
+      if (!loginState) {
+        setProfileInitial("U");
+        setDashboardHref("/dashboard/camaba");
+        return;
+      }
+
+      const rawUser = localStorage.getItem("user");
+      const cookieRole = document.cookie
+        .split(";")
+        .map((item) => item.trim())
+        .find((item) => item.startsWith("role="))
+        ?.split("=")[1];
+
+      try {
+        const parsed = rawUser ? JSON.parse(rawUser) : null;
+        const role = parsed?.role || cookieRole;
+        const displayName = parsed?.name || parsed?.registrationNumber || parsed?.username || "User";
+        const firstChar = String(displayName).trim().charAt(0).toUpperCase();
+
+        setProfileInitial(firstChar || "U");
+        setDashboardHref(role === "ADMIN" ? "/admin/dashboard" : "/dashboard/camaba");
+      } catch {
+        setProfileInitial("U");
+        setDashboardHref(cookieRole === "ADMIN" ? "/admin/dashboard" : "/dashboard/camaba");
+      }
+    };
+
+    syncAuthStatus();
     window.addEventListener("storage", syncAuthStatus);
     window.addEventListener("auth-change", syncAuthStatus);
 
@@ -66,7 +97,7 @@ export function NavigationMenuDemo() {
     window.dispatchEvent(new Event("auth-change"));
     setLoggedIn(false);
     setMobileOpen(false);
-    router.push("/login");
+    router.replace("/");
   };
 
   return (
@@ -180,9 +211,19 @@ export function NavigationMenuDemo() {
         </div>
         <div className="hidden min-[975px]:flex items-center gap-4">
           {loggedIn ? (
-            <button onClick={handleLogout} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#008000] shadow hover:bg-gray-100 transition" type="button">
-              Logout
-            </button>
+            <>
+              <Link
+                href={dashboardHref}
+                aria-label="Kembali ke dashboard"
+                title="Dashboard"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#108607] font-bold shadow hover:bg-[#e8f5e8] transition"
+              >
+                {profileInitial}
+              </Link>
+              <button onClick={handleLogout} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-700 transition" type="button">
+                Logout
+              </button>
+            </>
           ) : (
             <Link href="/login" className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#008000] shadow hover:bg-gray-100 transition">
               Login
@@ -249,7 +290,7 @@ export function NavigationMenuDemo() {
                 </ul>
               </details>
             </li>
-            <li>
+            {/* <li>
               <details>
                 <summary className="cursor-pointer text-white py-2 px-2 rounded hover:bg-[#006400]">PMJD</summary>
                 <ul className="pl-4">
@@ -262,7 +303,7 @@ export function NavigationMenuDemo() {
                   ))}
                 </ul>
               </details>
-            </li>
+            </li> */}
             <li>
               <Link href="https://pmb.ukdw.ac.id/" className="block py-2 px-2 text-white rounded hover:bg-[#006400]">
                 PMB
@@ -270,9 +311,15 @@ export function NavigationMenuDemo() {
             </li>
             <li>
               {loggedIn ? (
-                <button onClick={handleLogout} className="block w-full rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#008000] shadow hover:bg-gray-100 transition mt-2 text-left" type="button">
-                  Logout
-                </button>
+                <div className="mt-2 space-y-2">
+                  <Link href={dashboardHref} className="flex w-full items-center gap-3 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#108607] shadow hover:bg-gray-100 transition" onClick={() => setMobileOpen(false)}>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#108607] text-white font-bold">{profileInitial}</span>
+                    Dashboard
+                  </Link>
+                  <button onClick={handleLogout} className="block w-full rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-700 transition text-left" type="button">
+                    Logout
+                  </button>
+                </div>
               ) : (
                 <Link href="/login" className="block rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#008000] shadow hover:bg-gray-100 transition mt-2">
                   Login

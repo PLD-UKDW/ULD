@@ -23,7 +23,6 @@ interface Student {
 }
 
 interface GeoJSONFeatureProperties {
-  // The upstream data may use different keys; make all optional
   NAMA_PROV?: string;
   Propinsi?: string;
   PROPINSI?: string;
@@ -48,46 +47,36 @@ interface MapChartProps {
 function normalizeProvince(name: string): string {
   const n = (name || '').trim().toLowerCase();
   const map: Record<string, string> = {
-    // Aceh variations
     'nanggroe aceh darussalam': 'aceh',
     'di. aceh': 'aceh',
-    // NTB & NTT - GeoJSON uses "NUSATENGGARA" (no space)
     'ntb': 'nusa tenggara barat',
     'nusa tenggara barat': 'nusa tenggara barat',
-    'nusatenggara barat': 'nusa tenggara barat', // GeoJSON format (no space) → database format (with space)
+    'nusatenggara barat': 'nusa tenggara barat',
     'ntt': 'nusa tenggara timur',
     'nusa tenggara timur': 'nusa tenggara timur',
-    'nusatenggara timur': 'nusa tenggara timur', // GeoJSON format (no space)
-    // DIY - GeoJSON: "DAERAH ISTIMEWA YOGYAKARTA" vs Database: "DI Yogyakarta"
+    'nusatenggara timur': 'nusa tenggara timur',
     'di yogyakarta': 'di yogyakarta',
     'd.i yogyakarta': 'di yogyakarta',
-    'daerah istimewa yogyakarta': 'di yogyakarta', // GeoJSON format → database format
+    'daerah istimewa yogyakarta': 'di yogyakarta',
     'diy': 'di yogyakarta',
-    // Jakarta
     'dki jakarta': 'dki jakarta',
     'jakarta': 'dki jakarta',
-    // Banten - GeoJSON: "PROBANTEN"
     'probanten': 'probanten',
     'banten': 'probanten',
-    // Bangka Belitung
     'bangka belitung': 'bangka belitung',
     'kep. bangka belitung': 'bangka belitung',
     'kepulauan bangka belitung': 'bangka belitung',
-    // Riau
     'kepulauan riau': 'riau',
     'riau': 'riau',
-    // Kalimantan
     'kalimantan utara': 'kalimantan utara',
     'kalimatan utara': 'kalimantan utara',
     'kalimantan barat': 'kalimantan barat',
     'kalimantan tengah': 'kalimantan tengah',
     'kalimantan selatan': 'kalimantan selatan',
     'kalimantan timur': 'kalimantan timur',
-    // Papua - GeoJSON uses old "IRIAN JAYA" names, map to modern Papua provinces
     'irian jaya timur': 'papua barat',
     'irian jaya tengah': 'papua tengah',
     'irian jaya barat': 'papua barat',
-    // Papua - Modern names
     'papua barat': 'papua barat',
     'papua barat daya': 'papua barat daya',
     'papua selatan': 'papua selatan',
@@ -104,9 +93,7 @@ function getProvinceName(feature: Feature<Geometry, GeoJSONFeatureProperties>): 
 }
 
 function getColor(count: number): string {
-  // 0 stays the original green
   if (count === 0) return '#008000';
-  // Bright yellow for any count > 0
   return '#ffd400';
 }
   
@@ -134,7 +121,6 @@ const MapChart: React.FC<MapChartProps> = ({ data, ariaLabelledBy, ariaDescribed
     return `Peta sebaran mahasiswa disabilitas menampilkan ${data.length} mahasiswa. Sebaran terbanyak: ${top3}. Tekan Enter atau Spasi untuk membacakan ringkasan peta.`;
   }, [data]);
 
-  // DEBUG: Log all student data
   useEffect(() => {
     console.log('[DEBUG] MapChart received data:', data);
     if (data.length > 0) {
@@ -157,7 +143,6 @@ const MapChart: React.FC<MapChartProps> = ({ data, ariaLabelledBy, ariaDescribed
   }, []);
 
   const getFeatureStyle = (count: number) => {
-    // Check if high contrast is enabled
     const isHighContrast = typeof document !== 'undefined' && 
       document.documentElement.getAttribute('data-a11y-contrast') === 'high';
     return {
@@ -205,7 +190,6 @@ const MapChart: React.FC<MapChartProps> = ({ data, ariaLabelledBy, ariaDescribed
   const onEachFeature = (feature: Feature<Geometry, GeoJSONFeatureProperties>, layer: L.Layer) => {
     const { provinceName, matchingStudents } = getCountsForFeature(feature);
 
-    // DEBUG logging
     if (provinceName.toLowerCase().includes('nusa') || provinceName.toLowerCase().includes('papa')) {
       const { provNorm, studentCount } = getCountsForFeature(feature);
       console.log(`[DEBUG] Province: ${provinceName} → Normalized: ${provNorm} → Count: ${studentCount}`);
@@ -219,7 +203,6 @@ const MapChart: React.FC<MapChartProps> = ({ data, ariaLabelledBy, ariaDescribed
         const { studentCount, content } = getCountsForFeature(feature);
         const target = e.target as L.Path;
         const originalStyle = featureStyle(feature);
-        // Preserve fillColor, update interactive properties only
         target.setStyle({
           ...originalStyle,
           weight: 2.5,
@@ -227,20 +210,17 @@ const MapChart: React.FC<MapChartProps> = ({ data, ariaLabelledBy, ariaDescribed
           dashArray: '',
           fillOpacity: studentCount === 0 ? 0.5 : 0.8
         });
-        // Bind and open popup at cursor position to ensure visibility
         layer.bindPopup(content);
         (layer as any).openPopup(e.latlng);
       },
       mouseout: (e: L.LeafletMouseEvent) => {
         const target = e.target as L.Path;
         const originalStyle = featureStyle(feature);
-        // Completely restore original style to prevent color retention
         target.setStyle(originalStyle);
         layer.closePopup();
       },
       click: (e: L.LeafletMouseEvent) => {
         const { content, ttsMessage } = getCountsForFeature(feature);
-        // Fallback: open popup on click as well
         layer.bindPopup(content);
         (layer as any).openPopup(e.latlng);
         try {

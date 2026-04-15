@@ -5,17 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useTtsRate, getStoredTtsRate } from "@/lib/ttsRate";
 
-/* =====================================================
-   DO TEST PAGE – SCREEN READER FIRST
-===================================================== */
 
 export default function DoTestPage() {
   const { id } = useParams();
   const router = useRouter();
 
-  /* ==========================
-     DATA STATE
-  ========================== */
   const [test, setTest] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
@@ -25,9 +19,6 @@ export default function DoTestPage() {
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [showBackConfirmPopup, setShowBackConfirmPopup] = useState(false);
 
-  /* ==========================
-     ACCESSIBILITY
-  ========================== */
   const [useTTS, setUseTTS] = useState(true);
   const [currentSpeed, setCurrentSpeed] = useTtsRate(1);
   const [optionIndex, setOptionIndex] = useState(0);
@@ -108,7 +99,6 @@ export default function DoTestPage() {
     const loadVoices = () => {
       preferredVoiceRef.current = getPreferredVoice();
 
-      // Safari/Chrome kadang butuh trigger ulang setelah render awal.
       if (!preferredVoiceRef.current) {
         fallbackLoadTimeout = setTimeout(() => {
           preferredVoiceRef.current = getPreferredVoice();
@@ -127,24 +117,17 @@ export default function DoTestPage() {
     };
   }, [getPreferredVoice]);
 
-  /* ==========================
-     HELPER: GET LETTER LABEL
-  ========================== */
   const getLetter = useCallback((index: number, uppercase = true) => {
     const letter = String.fromCharCode(65 + index); // A=65, B=66, etc.
     return uppercase ? letter : letter.toLowerCase();
   }, []);
 
-  /* ==========================
-     HELPER: SPEAK SINGLE CHAR
-  ========================== */
   const speakChar = (char: string) => {
     if (!useTTS) return;
     if (!("speechSynthesis" in window)) return;
 
     window.speechSynthesis.cancel();
 
-    // Map special characters to readable text
     const charMap: Record<string, string> = {
       " ": "spasi",
       ".": "titik",
@@ -184,14 +167,10 @@ export default function DoTestPage() {
     isTypingRef.current = isTypingEssay;
   }, [isTypingEssay]);
 
-  /* =====================================================
-     CHANGE SPEECH SPEED
-  ===================================================== */
   const changeSpeed = (delta: number) => {
     setCurrentSpeed((prev) => {
       const next = Math.min(2, Math.max(0.5, prev + delta));
 
-      // Speak feedback
       if (useTTS && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
         const u1 = createUtterance("Kecepatan suara diubah.", next);
@@ -208,9 +187,6 @@ export default function DoTestPage() {
     showConfirmRef.current = showConfirmPopup || showBackConfirmPopup;
   }, [showConfirmPopup, showBackConfirmPopup]);
 
-  /* =====================================================
-     🔊 SPEECH ENGINE
-  ===================================================== */
   const speakQueue = (texts: string[]) => {
     if (!useTTS) return;
     if (!("speechSynthesis" in window)) return;
@@ -225,9 +201,6 @@ export default function DoTestPage() {
     });
   };
 
-  /* =====================================================
-     🔊 SPEECH QUEUE WITH PROMISE (WAIT UNTIL FINISH)
-  ===================================================== */
   const speakQueueAndWait = useCallback(
     (texts: string[]): Promise<void> => {
       return new Promise((resolve) => {
@@ -261,9 +234,6 @@ export default function DoTestPage() {
     [useTTS, createUtterance],
   );
 
-  /* ==========================
-     FETCH TEST
-  ========================== */
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -289,9 +259,6 @@ export default function DoTestPage() {
       .finally(() => setLoading(false));
   }, [id, router]);
 
-  /* =====================================================
-     READ QUESTION (defined before useEffect that uses it)
-  ===================================================== */
   const readQuestion = useCallback(
     async (index: number, questionsData?: any[]) => {
       const questionsToUse = questionsData || questions;
@@ -323,21 +290,14 @@ export default function DoTestPage() {
     [questions, speakQueueAndWait, getLetter],
   );
 
-  /* =====================================================
-     INTRO + SOAL PERTAMA
-  ===================================================== */
   useEffect(() => {
     if (loading || !test || !questions.length || !useTTS) return;
 
-    // Prevent multiple intro reads due to dependency changes
     if (introSpokenRef.current) return;
 
-    // Delay untuk memastikan TTS halaman sebelumnya sudah selesai
     const timeout = setTimeout(async () => {
-      // Mark as spoken INSIDE timeout so it's set after timeout runs
       introSpokenRef.current = true;
 
-      // Pastikan tidak ada TTS yang berjalan dari halaman sebelumnya
       window.speechSynthesis.cancel();
 
       // Gabungkan intro DAN soal pertama dalam satu queue agar tidak ada cancel
@@ -356,7 +316,6 @@ export default function DoTestPage() {
         `${q.text} ...`,
       ];
 
-      // Tambahkan opsi soal pertama
       if (q.questionType === "MULTIPLE_CHOICE") {
         q.options.forEach((opt: string, i: number) => {
           const label = getLetter(i);
@@ -379,20 +338,14 @@ export default function DoTestPage() {
     return () => clearTimeout(timeout);
   }, [loading, test, questions, useTTS, getLetter, speakQueueAndWait]);
 
-  /* =====================================================
-     KEYBOARD NAVIGATION (TTS MODE)
-  ===================================================== */
   useEffect(() => {
     if (!useTTS || !questions.length) return;
 
     const handler = (e: KeyboardEvent) => {
-      // Jika popup konfirmasi muncul, abaikan keyboard navigation
       if (showConfirmRef.current) return;
 
-      // Jika sedang mengetik essay, abaikan keyboard navigation
       if (isTypingRef.current) return;
 
-      /* SPEED CONTROL - Shift + Arrow Up/Down */
       if (e.shiftKey && e.code === "ArrowUp") {
         e.preventDefault();
         changeSpeed(0.1);
@@ -407,14 +360,11 @@ export default function DoTestPage() {
 
       const q = questions[current];
 
-      // Deteksi double left arrow untuk mengulang instruksi
       if (e.code === "ArrowLeft") {
         e.preventDefault();
         const now = Date.now();
 
         if (now - lastArrowLeftTime < 500) {
-          // Double press detected - ulang instruksi
-          // Batalkan timeout navigasi jika ada
           if (arrowLeftTimeoutRef.current) {
             clearTimeout(arrowLeftTimeoutRef.current);
             arrowLeftTimeoutRef.current = null;
@@ -437,14 +387,12 @@ export default function DoTestPage() {
 
         setLastArrowLeftTime(now);
 
-        // Set timeout untuk navigasi setelah 500ms jika tidak ada double press
         if (arrowLeftTimeoutRef.current) {
           clearTimeout(arrowLeftTimeoutRef.current);
         }
 
         arrowLeftTimeoutRef.current = setTimeout(() => {
           if (current > 0) {
-            // Jika soal sekarang adalah essay dan ada jawaban, bacakan dulu
             if (q.questionType === "ESSAY") {
               const essayAnswer = (answers[q.id] as string) ?? "";
               if (essayAnswer.trim()) {
@@ -480,7 +428,6 @@ export default function DoTestPage() {
         return;
       }
 
-      // PINDAH SOAL
       if (e.code === "ArrowRight") {
         e.preventDefault();
 
@@ -493,20 +440,17 @@ export default function DoTestPage() {
             return next;
           });
         } else {
-          // Soal terakhir, tampilkan popup submit
           setShowConfirmPopup(true);
           speakQueue(["Ini adalah soal terakhir. ...", "Apakah Anda yakin ingin mengirim jawaban? ...", "Tekan Enter untuk konfirmasi. ...", "Tekan Escape untuk batal."]);
         }
       }
 
-      // Tekan F untuk baca ulang soal
       if (e.code === "KeyF") {
         e.preventDefault();
         readQuestion(current);
         return;
       }
 
-      // MULTIPLE CHOICE
       if (q.questionType === "MULTIPLE_CHOICE") {
         if (e.code === "ArrowDown" || e.code === "ArrowUp") {
           e.preventDefault();
@@ -520,7 +464,6 @@ export default function DoTestPage() {
           });
         }
 
-        // Enter untuk memilih jawaban
         if (e.code === "Enter") {
           e.preventDefault();
           const key = getLetter(optionIndex, false);
@@ -529,7 +472,6 @@ export default function DoTestPage() {
         }
       }
 
-      // CHECKBOX
       if (q.questionType === "CHECKBOX") {
         if (e.code === "ArrowDown" || e.code === "ArrowUp") {
           e.preventDefault();
@@ -545,7 +487,6 @@ export default function DoTestPage() {
           });
         }
 
-        // Enter untuk toggle centang
         if (e.code === "Enter") {
           e.preventDefault();
           const key = getLetter(optionIndex, false);
@@ -562,9 +503,7 @@ export default function DoTestPage() {
         }
       }
 
-      // ESSAY - tekan enter untuk mulai mengetik
       if (q.questionType === "ESSAY" && !isTypingRef.current) {
-        // Enter untuk mulai mengetik
         if (e.code === "Enter") {
           e.preventDefault();
           setIsTypingEssay(true);
@@ -636,9 +575,6 @@ export default function DoTestPage() {
     }
   }, [id, answers, router]);
 
-  /* ==========================
-     POPUP KEYBOARD NAVIGATION
-  ========================== */
   useEffect(() => {
     if (!showConfirmPopup) return;
 
@@ -660,9 +596,6 @@ export default function DoTestPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [showConfirmPopup, handleSubmit]);
 
-  /* ==========================
-     UI
-  ========================== */
   if (loading) return <p className="min-h-[100dvh] px-4 pt-24 text-xl sm:px-6 sm:pt-28 lg:px-8 lg:pt-32">Memuat soal...</p>;
   if (!test) return <p className="min-h-[100dvh] px-4 pt-24 text-xl sm:px-6 sm:pt-28 lg:px-8 lg:pt-32">Test tidak ditemukan.</p>;
 
@@ -746,12 +679,10 @@ export default function DoTestPage() {
                   const oldValue = (answers[q.id] as string) ?? "";
                   const newValue = e.target.value;
 
-                  // Detect what character was typed
                   if (newValue.length > oldValue.length) {
                     const newChar = newValue[newValue.length - 1];
                     speakChar(newChar);
                   } else if (newValue.length < oldValue.length) {
-                    // Character was deleted
                     speakChar("hapus");
                   }
 
@@ -818,7 +749,6 @@ export default function DoTestPage() {
           )}
         </div>
 
-        {/* ================= POPUP KONFIRMASI SUBMIT ================= */}
         {showConfirmPopup && (
           <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
             <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl sm:p-8">
