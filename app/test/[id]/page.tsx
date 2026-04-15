@@ -23,6 +23,7 @@ export default function DoTestPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
+  const [showBackConfirmPopup, setShowBackConfirmPopup] = useState(false);
 
   /* ==========================
      ACCESSIBILITY
@@ -204,8 +205,8 @@ export default function DoTestPage() {
   };
 
   useEffect(() => {
-    showConfirmRef.current = showConfirmPopup;
-  }, [showConfirmPopup]);
+    showConfirmRef.current = showConfirmPopup || showBackConfirmPopup;
+  }, [showConfirmPopup, showBackConfirmPopup]);
 
   /* =====================================================
      🔊 SPEECH ENGINE
@@ -302,14 +303,14 @@ export default function DoTestPage() {
       if (q.questionType === "MULTIPLE_CHOICE") {
         q.options.forEach((opt: string, i: number) => {
           const label = getLetter(i);
-          queue.push(`Pilihan ${label}. ... ${opt} ...`);
+          queue.push(` ${label}. ... ${opt} ...`);
         });
 
         queue.push("Gunakan panah atas dan bawah untuk memilih jawaban. ... Tekan enter untuk memilih.");
       } else if (q.questionType === "CHECKBOX") {
         q.options.forEach((opt: string, i: number) => {
           const label = getLetter(i);
-          queue.push(`Pilihan ${label}. ... ${opt} ...`);
+          queue.push(`${label}. ... ${opt} ...`);
         });
 
         queue.push("Soal checklist. ... Gunakan panah atas dan bawah untuk berpindah jawaban. ... Tekan enter untuk mencentang atau menghapus centang.");
@@ -350,7 +351,7 @@ export default function DoTestPage() {
         "Tekan F untuk membaca ulang soal.",
         "Tekan panah kiri dua kali untuk ulang instruksi.",
         "Gunakan Shift panah atas untuk mempercepat suara, atau Shift panah bawah untuk memperlambat.",
-        "Soal pertama.",
+        // "Soal pertama.",
         `Soal 1. ...`,
         `${q.text} ...`,
       ];
@@ -359,13 +360,13 @@ export default function DoTestPage() {
       if (q.questionType === "MULTIPLE_CHOICE") {
         q.options.forEach((opt: string, i: number) => {
           const label = getLetter(i);
-          introAndFirstQuestion.push(`Pilihan ${label}. ... ${opt} ...`);
+          introAndFirstQuestion.push(` ${label}. ... ${opt} ...`);
         });
         introAndFirstQuestion.push("Gunakan panah atas dan bawah untuk berpindah jawaban. ... Tekan enter untuk memilih jawaban.");
       } else if (q.questionType === "CHECKBOX") {
         q.options.forEach((opt: string, i: number) => {
           const label = getLetter(i);
-          introAndFirstQuestion.push(`Pilihan ${label}. ... ${opt} ...`);
+          introAndFirstQuestion.push(` ${label}. ... ${opt} ...`);
         });
         introAndFirstQuestion.push("Soal checklist. ... Gunakan panah atas dan bawah untuk berpindah jawaban. ... Tekan enter untuk mencentang atau menghapus centang.");
       } else {
@@ -469,10 +470,9 @@ export default function DoTestPage() {
               return prev;
             });
           } else {
-            // Soal pertama, kembali ke dashboard
-            speakQueueAndWait(["Kembali ke halaman utama. ..."]).then(() => {
-              router.push("/dashboard/camaba");
-            });
+            // Soal pertama, tampilkan popup konfirmasi kembali
+            setShowBackConfirmPopup(true);
+            speakQueue(["Apakah Anda ingin kembali ke halaman utama? ...", "Tekan Enter untuk ya. ...", "Tekan Escape untuk batal."]);
           }
           arrowLeftTimeoutRef.current = null;
         }, 500);
@@ -514,7 +514,7 @@ export default function DoTestPage() {
           setOptionIndex((prev) => {
             const next = e.code === "ArrowDown" ? (prev + 1) % q.options.length : (prev - 1 + q.options.length) % q.options.length;
 
-            speakQueue([`Opsi ${getLetter(next)}. ...`, q.options[next]]);
+            speakQueue([`${getLetter(next)}. ...`, q.options[next]]);
 
             return next;
           });
@@ -539,7 +539,7 @@ export default function DoTestPage() {
 
             const selected = (answers[q.id] as string[]) || [];
             const isChecked = selected.includes(getLetter(next, false));
-            speakQueue([`Opsi ${getLetter(next)}. ...`, q.options[next], isChecked ? "Sudah dicentang." : "Belum dicentang."]);
+            speakQueue([` ${getLetter(next)}. ...`, q.options[next], isChecked ? "Sudah dicentang." : "Belum dicentang."]);
 
             return next;
           });
@@ -579,6 +579,31 @@ export default function DoTestPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [useTTS, questions, current, optionIndex, answers, lastArrowLeftTime, readQuestion, speakQueueAndWait, getLetter, router]);
+
+  /* ==========================
+     BACK POPUP KEYBOARD NAVIGATION (TTS ONLY)
+  ========================== */
+  useEffect(() => {
+    if (!showBackConfirmPopup || !useTTS) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.code === "Escape") {
+        e.preventDefault();
+        setShowBackConfirmPopup(false);
+        speakQueue(["Kembali ke halaman utama dibatalkan. ..."]);
+      }
+
+      if (e.code === "Space") {
+        e.preventDefault();
+        setShowBackConfirmPopup(false);
+        sessionStorage.setItem("announceMainPage", "true");
+        router.push("/dashboard/camaba");
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showBackConfirmPopup, useTTS, router]);
 
   /* ==========================
      SUBMIT
@@ -624,7 +649,7 @@ export default function DoTestPage() {
         speakQueue(["Pengiriman dibatalkan. ..."]);
       }
 
-      if (e.code === "Enter") {
+      if (e.code === "Space") {
         e.preventDefault();
         setShowConfirmPopup(false);
         handleSubmit();
@@ -740,9 +765,9 @@ export default function DoTestPage() {
 
                     const essayAnswer = (answers[q.id] as string) ?? "";
                     if (essayAnswer.trim()) {
-                      speakQueue(["Keluar dari mode mengetik. ...", "Jawaban Anda: ...", essayAnswer, "Gunakan panah kiri kanan untuk navigasi soal."]);
+                      speakQueue(["Keluar dari mode mengetik. ...", "Jawaban Anda: ...", essayAnswer]);
                     } else {
-                      speakQueue(["Keluar dari mode mengetik. ...", "Gunakan panah kiri kanan untuk navigasi soal."]);
+                      speakQueue(["Keluar dari mode mengetik. ..."]);
                     }
                   }
                 }}
@@ -758,7 +783,20 @@ export default function DoTestPage() {
         </div>
 
         <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-          <button onClick={() => (current === 0 ? router.push("/dashboard/camaba") : setCurrent((c) => c - 1))} className="w-full rounded-lg border px-5 py-3 text-base font-semibold sm:w-auto sm:text-lg">
+          <button
+            onClick={() => {
+              if (current === 0) {
+                setShowBackConfirmPopup(true);
+                if (useTTS) {
+                  speakQueue(["Apakah Anda ingin kembali ke halaman utama? ...", "Tekan Spasi untuk ya. ...", "Tekan Escape untuk batal."]);
+                }
+                return;
+              }
+
+              setCurrent((c) => c - 1);
+            }}
+            className="w-full rounded-lg border px-5 py-3 text-base font-semibold sm:w-auto sm:text-lg"
+          >
             {current === 0 ? "← Kembali" : "← Sebelumnya"}
           </button>
 
@@ -814,8 +852,42 @@ export default function DoTestPage() {
           </div>
         )}
 
+        {/* ================= POPUP KONFIRMASI KEMBALI ================= */}
+        {showBackConfirmPopup && (
+          <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl sm:p-8">
+              <h2 className="mb-4 text-center text-xl font-bold sm:text-2xl">Kembali ke Halaman Utama</h2>
+              <p className="mb-6 text-center text-base sm:text-lg">Apakah Anda yakin ingin kembali ke halaman utama?</p>
+
+              {useTTS && <p className="mb-6 text-center text-sm font-medium text-blue-600 sm:text-base">Spasi = Ya | Escape = Batal</p>}
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  onClick={() => {
+                    setShowBackConfirmPopup(false);
+                    if (useTTS) speakQueue(["Kembali ke halaman utama dibatalkan. ..."]);
+                  }}
+                  className="flex-1 rounded-lg bg-gray-300 px-5 py-3 text-base font-semibold text-gray-800 transition hover:bg-gray-400 sm:text-lg"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => {
+                    setShowBackConfirmPopup(false);
+                    sessionStorage.setItem("announceMainPage", "true");
+                    router.push("/dashboard/camaba");
+                  }}
+                  className="flex-1 rounded-lg bg-blue-600 px-5 py-3 text-base font-semibold text-white transition hover:bg-blue-700 sm:text-lg"
+                >
+                  Ya, Kembali
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* FLOATING SPEED CONTROL */}
-        {useTTS && !showConfirmPopup && (
+        {useTTS && !showConfirmPopup && !showBackConfirmPopup && (
           <div className="fixed bottom-4 right-4 z-40 flex flex-col items-center gap-3 rounded-xl border bg-white p-4 shadow-xl sm:bottom-6 sm:right-6">
             <p className="text-sm font-semibold text-black">Kecepatan Suara</p>
 

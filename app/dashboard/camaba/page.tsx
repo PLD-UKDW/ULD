@@ -227,6 +227,23 @@ export default function CamabaDashboardPage() {
     return () => clearTimeout(timeout);
   }, [loading]);
 
+  useEffect(() => {
+    if (loading || showAccessPopup) return;
+
+    const shouldAnnounceMainPage = sessionStorage.getItem("announceMainPage") === "true";
+    if (!shouldAnnounceMainPage) return;
+
+    sessionStorage.removeItem("announceMainPage");
+
+    if (!useTTS) return;
+
+    const timeout = setTimeout(() => {
+      speakQueue(["Anda berada di halaman utama."]);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [loading, showAccessPopup, useTTS]);
+
   /* =====================================================
      POPUP KEYBOARD NAVIGATION
   ===================================================== */
@@ -262,7 +279,7 @@ export default function CamabaDashboardPage() {
             "Gunakan panah kanan atau kiri untuk memilih.",
             "Tekan enter untuk membuka.",
             "Tekan panah kiri dua kali untuk mendengar ulang instruksi.",
-            "Tekan escape untuk keluar.",
+            "Tekan escape untuk keluar akun.",
             "Gunakan Shift dan panah atas atau bawah untuk mengatur kecepatan suara.",
           ]);
         } else {
@@ -321,7 +338,7 @@ export default function CamabaDashboardPage() {
 
           speakQueue([
             "Instruksi.",
-            `Anda berada di tes ${selectedIndex + 1} dari ${tests.length}.`,
+            // `Anda berada di tes ${selectedIndex + 1} dari ${tests.length}.`,
             "Gunakan panah kanan atau kiri untuk memilih.",
             "Tekan enter untuk membuka.",
             "Tekan panah kiri dua kali untuk mengulang instruksi.",

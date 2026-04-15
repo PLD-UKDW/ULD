@@ -20,13 +20,13 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-64 bg-[#108607] text-white flex flex-col shadow-xl min-h-screen">
+    <aside className="sticky top-0 min-h-screen w-64 self-stretch flex-shrink-0 bg-[#108607] text-white shadow-xl flex flex-col">
       {/* LOGO */}
-      <Image src="/logo/logould.png" width={100} height={100} alt="Logo" className="invert brightness-0 items-center mx-auto my-4" />
+      <Image src="/logo/logould.png" width={100} height={100} alt="Logo" className="invert brightness-0 items-center mx-auto mb-4 mt-24 sm:mt-28" />
       <div className="p-6 border-b border-white/20 text-center text-xl font-bold">ULD UKDW</div>
 
       {/* MENU */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 space-y-2 overflow-y-auto p-4">
         {/* Dashboard */}
         <Link href="/admin/dashboard" className={clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition", pathname === "/dashboard" ? "bg-white text-[#108607] font-semibold" : "hover:bg-white/10")}>
           <Home className="w-5 h-5" />

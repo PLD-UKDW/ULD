@@ -46,7 +46,7 @@ function loadState(): A11yState {
   return getDefaultState();
 }
 
-function applyState(s: A11yState) {
+function applyState(s: A11yState, isTtsDisabled = false) {
   const html = document.documentElement;
   html.setAttribute("data-a11y-contrast", s.contrast);
   html.setAttribute("data-a11y-fontscale", String(s.fontScale));
@@ -54,7 +54,7 @@ function applyState(s: A11yState) {
   html.setAttribute("data-a11y-links", s.links);
   html.setAttribute("data-a11y-dyslexia", s.dyslexia ? "on" : "off");
   html.setAttribute("data-a11y-colorblind", s.colorblind);
-  html.setAttribute("data-a11y-tts", s.ttsEnabled ? "on" : "off");
+  html.setAttribute("data-a11y-tts", s.ttsEnabled && !isTtsDisabled ? "on" : "off");
   html.setAttribute("data-a11y-keyboard-nav", s.keyboardNavEnabled ? "on" : "off");
 
   if (typeof document !== "undefined") {
@@ -81,6 +81,7 @@ export default function AccessibilityToolbar() {
   const [state, setState] = useState<A11yState>(loadState());
   const panelId = useId();
   const pathname = usePathname();
+  const isAdminRoute = pathname?.startsWith("/admin") ?? false;
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [speaking, setSpeaking] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -88,14 +89,14 @@ export default function AccessibilityToolbar() {
   const [lastShiftPress, setLastShiftPress] = useState(0);
   const a11yShortcutHelpText =
     "Shortcut aksesibilitas low vision: Alt Shift C untuk mengaktifkan atau menonaktifkan kontras tinggi. Tekan Shift Z untuk berpindah ke level zoom berikutnya antara 100 sampai 200 persen. Control Z untuk mereset semua filter dan fitur aksesibilitas. Tekan Shift dua kali untuk mendengar ulang shortcut ini.";
-  const isExcludedRoute = pathname === "/login" || pathname === "/dashboard/camaba" || /^\/test\/[^/]+(?:\/result)?$/.test(pathname ?? "");
+  const isExcludedRoute = pathname === "/login" || pathname === "/dashboard/camaba" || /^\/test\/[^/]+(?:\/result)?$/.test(pathname ?? "") || isAdminRoute;
 
   useEffect(() => {
     if (isExcludedRoute) {
       clearAppliedState();
       return;
     }
-    applyState(state);
+    applyState(state, isAdminRoute);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {}
@@ -114,7 +115,9 @@ export default function AccessibilityToolbar() {
         if (now - lastShiftPress < 500) {
           // Double shift detected
           e.preventDefault();
-          window.dispatchEvent(new CustomEvent("tts-say", { detail: { text: a11yShortcutHelpText } }));
+          if (!isAdminRoute) {
+            window.dispatchEvent(new CustomEvent("tts-say", { detail: { text: a11yShortcutHelpText } }));
+          }
           setLastShiftPress(0);
           return;
         }
@@ -128,7 +131,9 @@ export default function AccessibilityToolbar() {
         const targetTag = target?.tagName;
         if (targetTag !== "INPUT" && targetTag !== "TEXTAREA" && !target?.isContentEditable) {
           e.preventDefault();
-          window.dispatchEvent(new CustomEvent("tts-say", { detail: { text: "Tekan Shift dua kali untuk mendengar panduan shortcut aksesibilitas" } }));
+          if (!isAdminRoute) {
+            window.dispatchEvent(new CustomEvent("tts-say", { detail: { text: "Tekan Shift dua kali untuk mendengar panduan shortcut aksesibilitas" } }));
+          }
           return;
         }
       }
@@ -144,7 +149,7 @@ export default function AccessibilityToolbar() {
             const currentIndex = levels.indexOf(s.fontScale);
             const nextIndex = (currentIndex + 1) % levels.length;
             const nextZoom = levels[nextIndex];
-            if (s.ttsEnabled) {
+            if (s.ttsEnabled && !isAdminRoute) {
               window.dispatchEvent(new CustomEvent("tts-say", { detail: { text: `Zoom diatur ke ${nextZoom * 100} persen` } }));
             }
             return { ...s, fontScale: nextZoom };
@@ -158,7 +163,7 @@ export default function AccessibilityToolbar() {
         if (key === "a") {
           e.preventDefault();
           setOpen((o) => !o);
-          if (state.ttsEnabled) {
+          if (state.ttsEnabled && !isAdminRoute) {
             window.dispatchEvent(new CustomEvent("tts-say", { detail: { text: "Panel aksesibilitas dibuka atau ditutup." } }));
           }
           return;
@@ -168,7 +173,7 @@ export default function AccessibilityToolbar() {
           e.preventDefault();
           setState((s) => {
             const nextContrast = s.contrast === "high" ? "default" : "high";
-            if (s.ttsEnabled) {
+            if (s.ttsEnabled && !isAdminRoute) {
               window.dispatchEvent(
                 new CustomEvent("tts-say", {
                   detail: { text: nextContrast === "high" ? "Kontras tinggi aktif" : "Kontras tinggi nonaktif" },
@@ -183,7 +188,7 @@ export default function AccessibilityToolbar() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [isExcludedRoute, state.ttsEnabled, state.ttsRate, state.ttsPitch, state.ttsVoiceName, voices, lastShiftPress, a11yShortcutHelpText]);
+  }, [isExcludedRoute, isAdminRoute, state.ttsEnabled, state.ttsRate, state.ttsPitch, state.ttsVoiceName, voices, lastShiftPress, a11yShortcutHelpText]);
 
   // Reset accessibility features via custom event
   useEffect(() => {
@@ -229,7 +234,7 @@ export default function AccessibilityToolbar() {
     }
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     const onClick = (e: MouseEvent) => {
-      if (!state.ttsEnabled) return;
+      if (!state.ttsEnabled || isAdminRoute) return;
       const target = e.target as HTMLElement | null;
       if (!target) return;
       // Ignore clicks inside the toolbar
@@ -240,7 +245,7 @@ export default function AccessibilityToolbar() {
       if (text) speak(text);
     };
     const onTtsSay = (evt: Event) => {
-      if (!state.ttsEnabled) return;
+      if (!state.ttsEnabled || isAdminRoute) return;
       const ce = evt as CustomEvent<{ text?: string }>;
       const txt = (ce.detail?.text || "").trim();
       if (txt) speak(txt);
@@ -251,7 +256,7 @@ export default function AccessibilityToolbar() {
       document.removeEventListener("click", onClick);
       window.removeEventListener("tts-say", onTtsSay as EventListener);
     };
-  }, [isExcludedRoute, state.ttsEnabled, state.ttsRate, state.ttsPitch, state.ttsVoiceName, voices]);
+  }, [isExcludedRoute, isAdminRoute, state.ttsEnabled, state.ttsRate, state.ttsPitch, state.ttsVoiceName, voices]);
 
   if (isExcludedRoute) {
     return null;
@@ -384,10 +389,10 @@ export default function AccessibilityToolbar() {
       state.links !== "default" ||
       state.dyslexia !== false ||
       state.colorblind !== "none" ||
-      state.ttsEnabled !== false ||
-      (state.ttsRate !== undefined && state.ttsRate !== 1) ||
-      (state.ttsPitch !== undefined && state.ttsPitch !== 1) ||
-      (state.ttsVoiceName !== undefined && state.ttsVoiceName !== "") ||
+      (!isAdminRoute && state.ttsEnabled !== false) ||
+      (!isAdminRoute && state.ttsRate !== undefined && state.ttsRate !== 1) ||
+      (!isAdminRoute && state.ttsPitch !== undefined && state.ttsPitch !== 1) ||
+      (!isAdminRoute && state.ttsVoiceName !== undefined && state.ttsVoiceName !== "") ||
       state.keyboardNavEnabled !== false
     );
   }
@@ -454,60 +459,61 @@ export default function AccessibilityToolbar() {
 
       {open && (
         <div id={panelId} role="dialog" aria-label="Pengaturan aksesibilitas" className="mt-2 w-auto max-w-sm max-h-[60vh] overflow-y-auto rounded-md bg-white shadow-lg border p-3 text-sm">
-          {/* Text-to-Speech */}
-          <div className="mb-3 border-b pb-3">
-            <div className="font-semibold flex items-center justify-between">
-              <span>Text to Speech (klik teks untuk dibaca)</span>
-              <button
-                type="button"
-                aria-pressed={!!state.ttsEnabled}
-                onClick={() => setState((s) => ({ ...s, ttsEnabled: !(s.ttsEnabled ?? false) }))}
-                className={`px-3 py-1 rounded font-bold transition-colors shadow-md ${state.ttsEnabled ? "bg-green-600 hover:bg-green-700 text-white" : "bg-gray-300 hover:bg-gray-400 text-black"}`}
-              >
-                {state.ttsEnabled ? "ON" : "OFF"}
-              </button>
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs text-gray-600">Kecepatan: {(state.ttsRate ?? 1).toFixed(1)}x</label>
-                <input type="range" min={0.5} max={2} step={0.1} value={state.ttsRate ?? 1} onChange={(e) => setState((s) => ({ ...s, ttsRate: Number(e.target.value) }))} className="w-full" />
+          {!isAdminRoute && (
+            <div className="mb-3 border-b pb-3">
+              <div className="font-semibold flex items-center justify-between">
+                <span>Text to Speech (klik teks untuk dibaca)</span>
+                <button
+                  type="button"
+                  aria-pressed={!!state.ttsEnabled}
+                  onClick={() => setState((s) => ({ ...s, ttsEnabled: !(s.ttsEnabled ?? false) }))}
+                  className={`px-3 py-1 rounded font-bold transition-colors shadow-md ${state.ttsEnabled ? "bg-green-600 hover:bg-green-700 text-white" : "bg-gray-300 hover:bg-gray-400 text-black"}`}
+                >
+                  {state.ttsEnabled ? "ON" : "OFF"}
+                </button>
               </div>
-              <div>
-                <label className="block text-xs text-gray-600">Pitch: {(state.ttsPitch ?? 1).toFixed(2)}</label>
-                <input type="range" min={0.5} max={2} step={0.1} value={state.ttsPitch ?? 1} onChange={(e) => setState((s) => ({ ...s, ttsPitch: Number(e.target.value) }))} className="w-full" />
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-gray-600">Kecepatan: {(state.ttsRate ?? 1).toFixed(1)}x</label>
+                  <input type="range" min={0.5} max={2} step={0.1} value={state.ttsRate ?? 1} onChange={(e) => setState((s) => ({ ...s, ttsRate: Number(e.target.value) }))} className="w-full" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600">Pitch: {(state.ttsPitch ?? 1).toFixed(2)}</label>
+                  <input type="range" min={0.5} max={2} step={0.1} value={state.ttsPitch ?? 1} onChange={(e) => setState((s) => ({ ...s, ttsPitch: Number(e.target.value) }))} className="w-full" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-600">Suara</label>
+                  <select className="w-full border rounded px-2 py-1" value={state.ttsVoiceName ?? ""} onChange={(e) => setState((s) => ({ ...s, ttsVoiceName: e.target.value }))}>
+                    {voices.length === 0 ? (
+                      <option value="">Default</option>
+                    ) : (
+                      voices.map((v) => (
+                        <option key={v.name} value={v.name}>
+                          {v.name} ({v.lang})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
               </div>
-              <div className="col-span-2">
-                <label className="block text-xs text-gray-600">Suara</label>
-                <select className="w-full border rounded px-2 py-1" value={state.ttsVoiceName ?? ""} onChange={(e) => setState((s) => ({ ...s, ttsVoiceName: e.target.value }))}>
-                  {voices.length === 0 ? (
-                    <option value="">Default</option>
-                  ) : (
-                    voices.map((v) => (
-                      <option key={v.name} value={v.name}>
-                        {v.name} ({v.lang})
-                      </option>
-                    ))
-                  )}
-                </select>
+              <div className="mt-2 flex gap-2">
+                {speaking && (
+                  <>
+                    <button
+                      type="button"
+                      className={`px-2 py-1 border rounded font-semibold transition-colors ${paused ? "bg-blue-100 hover:bg-blue-200" : "bg-yellow-100 hover:bg-yellow-200"}`}
+                      onClick={paused ? resumeSpeaking : pauseSpeaking}
+                    >
+                      {paused ? "▶ Lanjutkan" : "⏸ Jeda"}
+                    </button>
+                    <button type="button" className="px-2 py-1 border rounded bg-gray-100 hover:bg-gray-200" onClick={stopSpeaking}>
+                      ⏹ Hentikan
+                    </button>
+                  </>
+                )}
               </div>
             </div>
-            <div className="mt-2 flex gap-2">
-              {speaking && (
-                <>
-                  <button
-                    type="button"
-                    className={`px-2 py-1 border rounded font-semibold transition-colors ${paused ? "bg-blue-100 hover:bg-blue-200" : "bg-yellow-100 hover:bg-yellow-200"}`}
-                    onClick={paused ? resumeSpeaking : pauseSpeaking}
-                  >
-                    {paused ? "▶ Lanjutkan" : "⏸ Jeda"}
-                  </button>
-                  <button type="button" className="px-2 py-1 border rounded bg-gray-100 hover:bg-gray-200" onClick={stopSpeaking}>
-                    ⏹ Hentikan
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+          )}
 
           {/* Keyboard Navigation */}
           <div className="mb-3 border-b pb-3">
