@@ -47,6 +47,10 @@ export default function BeritaAdminPage() {
   const [content, setContent] = useState<string>("");
   const [categories, setCategories] = useState<Array<{id:number; name:string}>>([]);
   const [newCategory, setNewCategory] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryDeletingId, setCategoryDeletingId] = useState<number | null>(null);
   const [tanggal, setTanggal] = useState("");
   const [lokasi, setLokasi] = useState("");
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -55,6 +59,8 @@ export default function BeritaAdminPage() {
   const [existingImageErrors, setExistingImageErrors] = useState<Record<number, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [toasts, setToasts] = useState<{ id: number; message: string; type: "info"|"success"|"error" }[]>([]);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [list, setList] = useState<Array<{id:number; title:string; category?:{id:number; name:string}|null; isPublished:boolean; createdAt:string; tanggal?:string|null; lokasi?:string|null; content?:string; content_images?:string}>>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   
@@ -115,8 +121,6 @@ export default function BeritaAdminPage() {
     if (newImageInputRef.current) newImageInputRef.current.value = "";
   };
 
-  // Safely parse JSON; fallback to text message to avoid HTML parse errors
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parseJSON = useCallback(async (res: Response): Promise<any> => {
     const ct = res.headers.get("content-type") || "";
     if (ct.includes("application/json")) {
@@ -170,7 +174,6 @@ export default function BeritaAdminPage() {
         quillInstanceRef.current = null;
       }
       
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const q = new (QuillModule as any)(quillContainerRef.current, {
         theme: "snow",
         modules: quillModules,
@@ -178,7 +181,6 @@ export default function BeritaAdminPage() {
         placeholder: "Ketik konten berita di sini...",
       });
       quillInstanceRef.current = q;
-      // Sanitize pasted content: drop SVG/FIGURE elements that can render odd shapes
       try {
         const clipboard = q.getModule("clipboard");
         if (clipboard) {
@@ -233,8 +235,8 @@ export default function BeritaAdminPage() {
         formData.append("keep_existing_images", existingImages.join(","));
       }
 
-      const url = editingId 
-        ? `http://localhost:4000/api/update-berita/${editingId}` 
+      const url = editingId
+        ? `http://localhost:4000/api/update-berita/${editingId}`
         : "http://localhost:4000/api/create-berita";
       const method = editingId ? "PUT" : "POST";
 
@@ -249,7 +251,7 @@ export default function BeritaAdminPage() {
       addToast(`Berita berhasil ${editingId ? 'diupdate' : 'dibuat'}`, "success");
       resetForm();
       fetchList();
-    } catch (err) { 
+    } catch (err) {
       console.error(err);
       const error = err as Error;
       addToast(`Error saat ${editingId ? 'mengupdate' : 'membuat'} berita: ${error.message}`, "error"); 
@@ -258,12 +260,12 @@ export default function BeritaAdminPage() {
   };
 
   const resetForm = () => {
-    setTitle(""); 
-    setContent(""); 
-    setCategoryId(""); 
-    setTanggal(""); 
-    setLokasi(""); 
-    setImageFiles([]); 
+    setTitle("");
+    setContent("");
+    setCategoryId("");
+    setTanggal("");
+    setLokasi("");
+    setImageFiles([]);
       setExistingImages([]);
     setIsPublished(false);
     setEditingId(null);
@@ -284,7 +286,6 @@ export default function BeritaAdminPage() {
         return;
       }
       
-      // Populate form with existing data
       setEditingId(id);
       setTitle(body.title || "");
       setContent(body.content || "");
@@ -300,12 +301,10 @@ export default function BeritaAdminPage() {
       
       setImageFiles([]);
       
-      // Update Quill editor
       if (quillInstanceRef.current) {
         quillInstanceRef.current.root.innerHTML = sanitizeHtml(body.content || "");
       }
       
-      // Scroll to form
       window.scrollTo({ top: 0, behavior: 'smooth' });
       addToast("Mode Edit - Silakan ubah data dan simpan", "info");
     } catch (err) {
@@ -346,6 +345,95 @@ export default function BeritaAdminPage() {
     } catch { addToast("Error menambah kategori", "error"); }
   };
 
+  const startEditCategory = (category: { id: number; name: string }) => {
+    setEditingCategoryId(category.id);
+    setEditingCategoryName(category.name);
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName("");
+  };
+
+  const handleUpdateCategory = async (id: number) => {
+    if (!token) {
+      addToast("Belum login", "error");
+      return;
+    }
+
+    const name = editingCategoryName.trim();
+    if (!name) {
+      addToast("Nama kategori wajib diisi", "error");
+      return;
+    }
+
+    setCategorySaving(true);
+    try {
+      const res = await fetch(`http://localhost:4000/api/berita-categories/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name }),
+      });
+      const body = await parseJSON(res);
+      if (!res.ok) {
+        addToast(body?.message || "Gagal update kategori", "error");
+        return;
+      }
+
+      addToast("Kategori berhasil diupdate", "success");
+      if (categoryId === String(id)) {
+        setCategoryId(String(id));
+      }
+      cancelEditCategory();
+      fetchCategories();
+      fetchList();
+    } catch {
+      addToast("Error update kategori", "error");
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: number) => {
+    if (!token) {
+      addToast("Belum login", "error");
+      return;
+    }
+
+    const yes = window.confirm("Yakin ingin menghapus kategori ini? Berita pada kategori ini akan menjadi tanpa kategori.");
+    if (!yes) return;
+
+    setCategoryDeletingId(id);
+    try {
+      const res = await fetch(`http://localhost:4000/api/berita-categories/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await parseJSON(res);
+      if (!res.ok) {
+        addToast(body?.message || "Gagal menghapus kategori", "error");
+        return;
+      }
+
+      addToast("Kategori berhasil dihapus", "success");
+      if (categoryId === String(id)) {
+        setCategoryId("");
+      }
+      if (editingCategoryId === id) {
+        cancelEditCategory();
+      }
+      fetchCategories();
+      fetchList();
+    } catch {
+      addToast("Error menghapus kategori", "error");
+    } finally {
+      setCategoryDeletingId(null);
+    }
+  };
+
   const togglePublish = async (id:number, publish:boolean) => {
     if(!token) return;
     try {
@@ -359,18 +447,29 @@ export default function BeritaAdminPage() {
   };
 
   const deleteItem = async (id:number) => {
-    if(!token) return;
-    if(!confirm("Yakin hapus berita?")) return;
+    setDeleteTargetId(id);
+  };
+
+  const confirmDeleteItem = async () => {
+    if(!token) {
+      addToast("Sesi login tidak ditemukan", "error");
+      setDeleteTargetId(null);
+      return;
+    }
+    if (deleteTargetId === null) return;
+    setDeleting(true);
     try {
-      const res = await fetch(`http://localhost:4000/api/delete-berita/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`http://localhost:4000/api/delete-berita/${deleteTargetId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       if(!res.ok){
         const body = await parseJSON(res);
         addToast(body?.message||"Gagal menghapus", "error");
         return;
       }
       addToast("Berita dihapus", "success");
+      setDeleteTargetId(null);
       fetchList();
     } catch { addToast("Error menghapus", "error"); }
+    finally { setDeleting(false); }
   };
 
   return (
@@ -464,7 +563,6 @@ export default function BeritaAdminPage() {
             </div>
           )}
 
-          {/* NEW IMAGES */}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium">Gambar Konten {editingId && existingImages.length === 0 ? "(Wajib - gambar lama akan dihapus)" : "(bisa multiple)"}</label>
             <input 
@@ -521,7 +619,6 @@ export default function BeritaAdminPage() {
         </div>
       </form>
 
-      {/* tambah kategori */}
       <form onSubmit={handleAddCategory} className="bg-white p-5 rounded-lg shadow mb-6">
         <h2 className="text-lg font-semibold mb-3">Tambah Kategori Berita</h2>
         <div className="flex flex-col md:flex-row gap-3 items-start md:items-end">
@@ -532,6 +629,85 @@ export default function BeritaAdminPage() {
           <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded">Tambah</button>
         </div>
       </form>
+
+      <div className="bg-white p-5 rounded-lg shadow mb-6">
+        <h2 className="text-lg font-semibold mb-3">Daftar Kategori Berita</h2>
+        {categories.length === 0 ? (
+          <p className="text-sm text-gray-600">Belum ada kategori.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full table-auto">
+              <thead>
+                <tr className="bg-gray-100 text-left">
+                  <th className="px-3 py-2">Nama Kategori</th>
+                  <th className="px-3 py-2">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categories.map((cat) => {
+                  const isEditing = editingCategoryId === cat.id;
+                  return (
+                    <tr key={cat.id} className="border-t">
+                      <td className="px-3 py-2">
+                        {isEditing ? (
+                          <input
+                            className="w-full rounded border p-2"
+                            value={editingCategoryName}
+                            onChange={(e) => setEditingCategoryName(e.target.value)}
+                          />
+                        ) : (
+                          cat.name
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex gap-2">
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateCategory(cat.id)}
+                                disabled={categorySaving}
+                                className="rounded bg-blue-600 px-3 py-1 text-white hover:bg-blue-700 disabled:opacity-60"
+                              >
+                                {categorySaving ? "Menyimpan..." : "Simpan"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditCategory}
+                                className="rounded border px-3 py-1 hover:bg-gray-100"
+                              >
+                                Batal
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => startEditCategory(cat)}
+                                className="rounded bg-yellow-500 px-3 py-1 text-white hover:bg-yellow-600"
+                              >
+                                Update
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCategory(cat.id)}
+                                disabled={categoryDeletingId === cat.id}
+                                className="rounded bg-red-600 px-3 py-1 text-white hover:bg-red-700 disabled:opacity-60"
+                              >
+                                {categoryDeletingId === cat.id ? "Menghapus..." : "Delete"}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="bg-white p-5 rounded-lg shadow">
         <h2 className="text-lg font-semibold mb-3">Daftar Berita</h2>
@@ -586,7 +762,34 @@ export default function BeritaAdminPage() {
         )}
       </div>
 
-      <div className="fixed right-4 bottom-4 flex flex-col gap-2">
+      {deleteTargetId !== null && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
+            <h3 className="text-lg font-semibold">Konfirmasi Hapus Berita</h3>
+            <p className="mt-2 text-sm text-gray-700">Berita yang dihapus tidak bisa dikembalikan. Lanjutkan?</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTargetId(null)}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-100"
+                disabled={deleting}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteItem}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                disabled={deleting}
+              >
+                {deleting ? "Menghapus..." : "Hapus"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="fixed right-4 top-24 z-[75] flex max-w-sm flex-col gap-2">
         {toasts.map(t=> (
           <div key={t.id} className={`px-4 py-2 rounded shadow text-white ${t.type==='error'? 'bg-red-500' : t.type==='success'? 'bg-green-600' : 'bg-gray-700'}`}>{t.message}</div>
         ))}

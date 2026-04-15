@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-// Tipe data berita
 type Berita = {
   id: number;
   title: string;
@@ -18,7 +17,6 @@ type Berita = {
   content: string;
 };
 
-// Helper untuk format tanggal Indonesia
 function formatIDDate(input?: string | Date | null) {
   if (!input) return "";
   const d = typeof input === "string" ? new Date(input) : input;
@@ -26,7 +24,6 @@ function formatIDDate(input?: string | Date | null) {
   return d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 }
 
-// Bangun daftar URL gambar dari content_images
 function buildImages(content_images?: string) {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
   if (!content_images) return [] as string[];
@@ -37,7 +34,6 @@ function buildImages(content_images?: string) {
     .map((file) => `${API_BASE}/uploads/berita/${file}`);
 }
 
-// Ambil teks bersih untuk ringkasan kartu (hilangkan tag HTML)
 function extractPlainText(html?: string) {
   if (!html) return "";
   if (typeof window !== "undefined") {
@@ -51,7 +47,6 @@ function extractPlainText(html?: string) {
   return stripped.replace(/\s+/g, " ").trim();
 }
 
-// Konversi respons API ke tipe Berita
 function mapApiToBerita(item: unknown): Berita {
   const i = item as { id: number; title?: string; content?: string; content_images?: string; category?: { name?: string }; tanggal?: string; createdAt?: string };
   const categoryName = i?.category?.name ?? "Umum";
@@ -74,11 +69,9 @@ function mapApiToBerita(item: unknown): Berita {
   } as Berita;
 }
 
-// Component untuk detail berita
 function BeritaDetail({ berita, onBack, otherBerita }: { berita: Berita; onBack: () => void; otherBerita: Berita[] }) {
   return (
     <div className="min-h-screen">
-      {/* Tombol Kembali di bagian atas (offset dari navbar) */}
       <div className=" sticky top-28 z-10">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
           <button
@@ -93,13 +86,10 @@ function BeritaDetail({ berita, onBack, otherBerita }: { berita: Berita; onBack:
       </div>
 
       <div className="max-w-7xl mx-auto px-6 pt-32 pb-12">
-        {/* Artikel Utama - Full Width tanpa border samping */}
         <article className="bg-white overflow-hidden mb-12">
-          {/* Judul paling atas */}
           <h1 className="text-3xl md:text-4xl font-bold text-[#3e4095] mb-6 mt-2">
             {berita.title}
           </h1>
-          {/* Gambar / Galeri */}
           {berita.images.length > 1 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
               {berita.images.map((img, idx) => {
@@ -136,7 +126,6 @@ function BeritaDetail({ berita, onBack, otherBerita }: { berita: Berita; onBack:
               className="w-full h-96 object-cover mb-6 rounded-lg"
             />
           )}
-          {/* Sebaris: Kategori, Tanggal, Lokasi */}
           <div className="flex flex-wrap items-center gap-4 mb-6 text-sm text-gray-600">
             <span className="bg-[#02a502] text-white px-3 py-1 rounded-full text-xs font-medium">
               {berita.category}
@@ -150,14 +139,12 @@ function BeritaDetail({ berita, onBack, otherBerita }: { berita: Berita; onBack:
               {berita.author}
             </div>
           </div>
-          {/* Konten berita */}
           <div
             className="prose prose-lg max-w-none prose-img:rounded-lg prose-img:max-w-full prose-img:h-auto prose-img:mx-auto"
             dangerouslySetInnerHTML={{ __html: normalizeContent(berita.content || "") }}
           />
         </article>
 
-        {/* Berita Lainnya */}
         {otherBerita.length > 0 && (
           <section className="mt-16">
             <h2 className="text-2xl md:text-3xl font-bold text-[#3e4095] mb-8">
@@ -242,7 +229,6 @@ export default function BeritaUmumPage() {
     return () => { active = false; };
   }, []);
 
-  // Show detail view if a berita is selected
   if (selectedBerita) {
     const otherBerita = items.filter(item => item.id !== selectedBerita.id).slice(0, 8);
     return <BeritaDetail berita={selectedBerita} onBack={() => setSelectedBerita(null)} otherBerita={otherBerita} />;
@@ -251,7 +237,6 @@ export default function BeritaUmumPage() {
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-gray-50 py-16 px-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="mb-12 text-center">
           <Link
             href="/"
@@ -268,7 +253,6 @@ export default function BeritaUmumPage() {
           </p>
         </div>
 
-        {/* Loading State */}
         {loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -277,7 +261,6 @@ export default function BeritaUmumPage() {
           </div>
         )}
 
-        {/* Error State */}
         {error && (
           <div className="text-center py-20">
             <p className="text-red-600 font-medium text-lg mb-4">{error}</p>
@@ -290,7 +273,6 @@ export default function BeritaUmumPage() {
           </div>
         )}
 
-        {/* Empty State */}
         {!loading && !error && items.length === 0 && (
           <div className="text-center py-20">
             <p className="text-gray-500 text-xl mb-4">Belum ada berita yang dipublikasikan</p>
@@ -298,7 +280,6 @@ export default function BeritaUmumPage() {
           </div>
         )}
 
-        {/* News Grid */}
         {!loading && !error && items.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {items.map((berita) => (
@@ -345,7 +326,6 @@ export default function BeritaUmumPage() {
   );
 }
 
-// Decode HTML entities and drop script/style tags to avoid showing raw tags
 function normalizeContent(html: string) {
   if (!html) return "";
   const decoded = html

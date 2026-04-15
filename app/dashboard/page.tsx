@@ -49,11 +49,10 @@ export default function DashboardPeserta() {
 
       setTests(testsData);
 
-      // Convert backend status → frontend format
       const converted = testsData.map((t: TestItem) => ({
         testId: t.id,
         isCompleted: statusData.doneTypes.includes(t.type),
-        score: null, // backend belum kirim skor, nanti bisa ditambah
+        score: null,
       }));
 
       setStatus(converted);

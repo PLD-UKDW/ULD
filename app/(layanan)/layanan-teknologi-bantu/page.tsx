@@ -1,17 +1,17 @@
 "use client";
 
-import { 
-  Headphones, 
-  Search, 
-  Monitor, 
-  Accessibility, 
-  Cpu, 
-  Wrench, 
-  HelpCircle, 
-  ClipboardList, 
-  BookOpen, 
-  Users, 
-  FileText, 
+import {
+  Headphones,
+  Search,
+  Monitor,
+  Accessibility,
+  Cpu,
+  Wrench,
+  HelpCircle,
+  ClipboardList,
+  BookOpen,
+  Users,
+  FileText,
   Car
 } from "lucide-react";
 import Link from "next/link";
@@ -39,9 +39,7 @@ export default function TeknologiBantuPage() {
     <section className="relative w-full min-h-screen bg-gradient-to-br from-green-900 via-emerald-900 to-green-800 text-white pt-32 pb-20 px-6 md:px-16 lg:px-24">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
         
-        {/* Left Content */}
         <div className="lg:col-span-2 space-y-10">
-          {/* Header */}
           <div>
             <h1 className="text-3xl md:text-5xl font-bold leading-tight mb-4 flex items-center gap-3 text-white">
               <Wrench className="w-8 h-8 text-white" />
@@ -53,7 +51,6 @@ export default function TeknologiBantuPage() {
             </p>
           </div>
 
-          {/* Daftar Teknologi */}
           <div>
             <h2 className="text-2xl font-bold mb-6 text-white">
               Daftar Teknologi
@@ -91,7 +88,6 @@ export default function TeknologiBantuPage() {
           </div>
         </div>
 
-        {/* Sidebar */}
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl border border-white/20">
           <h2 className="text-xl font-bold mb-6 text-green-400">Layanan Lainnya</h2>
           <ul className="space-y-4">

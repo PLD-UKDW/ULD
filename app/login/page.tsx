@@ -1,93 +1,10 @@
-// "use client";
-
-// import api from "@/lib/api";
-// import Image from "next/image";
-// import { useRouter } from "next/navigation";
-// import React, { useState } from "react";
-
-// const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000";
-
-// export default function LoginPage() {
-//   const [registrationNumber, setRegistrationNumber] = useState("");
-//   const [error, setError] = useState("");
-//   const [loading, setLoading] = useState(false);
-
-//   const router = useRouter();
-
-//   const handleLogin = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     setError("");
-//     setLoading(true);
-
-//     try {
-//       const res = await api.post("/api/login", { registrationNumber });
-
-//       if (res.data.message === "OTP sent") {
-//         document.cookie = `authStage=otp; path=/; max-age=600`;
-//         document.cookie = `pendingRegNumber=${registrationNumber}; path=/; max-age=600`;
-//         router.push(`/otp?registrationNumber=${registrationNumber}`);
-//         return;
-//       }
-
-//       if (res.data.token) {
-//         const role = res.data.user?.role;
-//         localStorage.setItem("token", res.data.token);
-//         localStorage.setItem("user", JSON.stringify(res.data.user));
-//         document.cookie = `authToken=${res.data.token}; path=/; max-age=86400`;
-//         document.cookie = `role=${role}; path=/; max-age=86400`;
-//         if (role === "ADMIN") {
-//           router.push("/admin/dashboard");
-//         } else {
-//           router.push("/dashboard/camaba");
-//         }
-//         return;
-//       }
-
-//       setError("Unexpected response from server");
-//     } catch (err: unknown) {
-//       let message = "Login failed";
-//       if (typeof err === "object" && err !== null) {
-//         const maybeResp = err as { response?: { data?: { message?: string } } };
-//         message = maybeResp.response?.data?.message || (err instanceof Error ? err.message : message);
-//       }
-//       setError(message);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div className="bg-[#8db93f] min-h-screen flex items-center justify-center p-6">
-//       <div className="w-full max-w-md bg-[#108607] rounded-2xl shadow-xl p-10">
-//         <div className="flex justify-center mb-6">
-//           <Image src="/logo/logould.png" width={120} height={120} alt="Logo" className="invert brightness-0" />
-//         </div>
-//         <h1 className="text-3xl font-bold text-white text-center mb-2">Welcome Back!</h1>
-//         <p className="text-white/90 text-center mb-8 px-4">Please sign in to your account by completing the necessary fields below</p>
-//         <form onSubmit={handleLogin} className="mt-4">
-//           <label className="text-white text-sm mb-2 block">Nomor Registrasi</label>
-//           <input type="text" name="registrationNumber" value={registrationNumber} onChange={(e) => setRegistrationNumber(e.target.value)} placeholder="Masukkan Nomor Registrasi Anda" className="w-full px-4 py-3 mb-6 rounded-lg border border-white/60 bg-white/10 text-white placeholder-white/70 focus:border-white" />
-//           {error && <p className="mb-3 text-center text-sm text-red-300">{error}</p>}
-//           <button type="submit" disabled={loading} className="w-full bg-white text-[#108607] py-3 rounded-lg font-semibold hover:bg-gray-100 transition disabled:opacity-70 flex items-center justify-center gap-2">
-//             Sign In
-//             {loading && <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-[#108607] border-t-transparent" />}
-//           </button>
-//           <button type="button" onClick={() => { document.cookie = "authStage=; Max-Age=0; path=/"; document.cookie = "pendingRegNumber=; Max-Age=0; path=/"; window.location.href = FRONTEND_URL; }} className="mt-3 w-full border border-white/60 text-white py-3 rounded-lg font-semibold hover:bg-white/10 transition">
-//             Kembali ke Halaman Utama
-//           </button>
-//         </form>
-//       </div>
-//     </div>
-//   );
-// }
-
 "use client";
 
 import api from "@/lib/api";
 import { getStoredTtsRate, useTtsRate } from "@/lib/ttsRate";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000";
 
@@ -154,14 +71,10 @@ export default function LoginPage() {
     };
   }, [getPreferredVoice]);
 
-  /* ==========================
-     CHANGE SPEECH SPEED
-  ========================== */
   const changeSpeed = (delta: number) => {
     setCurrentSpeed((prev: number) => {
       const next = Math.min(2, Math.max(0.5, prev + delta));
 
-      // Speak feedback
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
         const u1 = createUtterance("Kecepatan suara diubah.");
@@ -176,9 +89,6 @@ export default function LoginPage() {
     });
   };
 
-  /* ==========================
-     TEXT TO SPEECH WITH PROMISE (WAIT UNTIL FINISH)
-  ========================== */
   const speak = (text: string, cancelPrevious: boolean = true) => {
     if (typeof window === "undefined") return;
 
@@ -191,9 +101,6 @@ export default function LoginPage() {
     window.speechSynthesis.speak(utterance);
   };
 
-  /* ==========================
-     SPEAK SINGLE CHARACTER
-  ========================== */
   const speakChar = (char: string) => {
     if (typeof window === "undefined") return;
 
@@ -204,9 +111,6 @@ export default function LoginPage() {
     window.speechSynthesis.speak(utterance);
   };
 
-  /* ==========================
-     SPEAK AND WAIT UNTIL FINISH
-  ========================== */
   const speakAndWait = (text: string): Promise<void> => {
     return new Promise((resolve) => {
       if (typeof window === "undefined") {
@@ -225,11 +129,7 @@ export default function LoginPage() {
     });
   };
 
-  /* ==========================
-     AUTO SPEAK WHEN PAGE LOAD
-  ========================== */
   useEffect(() => {
-    // Delay untuk memastikan TTS halaman sebelumnya sudah selesai
     const timeout = setTimeout(() => {
       window.speechSynthesis.cancel();
       speak(
@@ -248,28 +148,21 @@ export default function LoginPage() {
     };
   }, []);
 
-  /* ==========================
-     SPEAK EACH CHARACTER WHEN TYPING
-  ========================== */
   useEffect(() => {
     if (isTyping && registrationNumber.length > lastCharIndex) {
-      // Karakter baru ditambahkan, ucapkan karakter tersebut
       const newChar = registrationNumber[registrationNumber.length - 1];
       speakChar(newChar);
       setLastCharIndex(registrationNumber.length);
     } else if (registrationNumber.length < lastCharIndex) {
-      // Karakter dihapus, ucapkan "hapus"
       speakChar("hapus");
       setLastCharIndex(registrationNumber.length);
     }
   }, [registrationNumber, isTyping, lastCharIndex]);
 
-  /* ==========================
-     CONVERT KEY TO SPOKEN TEXT
-  ========================== */
   const getKeyName = (e: KeyboardEvent): string => {
+    const key = typeof e.key === "string" ? e.key : "";
+
     const keyMap: Record<string, string> = {
-      // Special keys
       Escape: "escape",
       Enter: "enter",
       Backspace: "hapus",
@@ -281,12 +174,10 @@ export default function LoginPage() {
       Alt: "alt",
       Meta: "command",
       Space: "spasi",
-      // Arrow keys
       ArrowUp: "panah atas",
       ArrowDown: "panah bawah",
       ArrowLeft: "panah kiri",
       ArrowRight: "panah kanan",
-      // Function keys
       F1: "f 1",
       F2: "f 2",
       F3: "f 3",
@@ -299,7 +190,6 @@ export default function LoginPage() {
       F10: "f 10",
       F11: "f 11",
       F12: "f 12",
-      // Other special keys
       Home: "home",
       End: "end",
       PageUp: "page up",
@@ -311,43 +201,37 @@ export default function LoginPage() {
       ContextMenu: "menu",
     };
 
-    // Check if key is in the map
-    if (keyMap[e.key]) {
-      return keyMap[e.key];
+    if (keyMap[key]) {
+      return keyMap[key];
     }
 
-    // For single characters (letters, numbers, symbols)
-    if (e.key.length === 1) {
-      return e.key;
+    if (key.length === 1) {
+      return key;
     }
 
-    // Default: return the key name as is
-    return e.key;
+    return key;
   };
 
-  /* ==========================
-     KEYBOARD CONTROL
-  ========================== */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Speak every key pressed (untuk accessibility)
+      const key = typeof e.key === "string" ? e.key : "";
+      const code = typeof e.code === "string" ? e.code : "";
+
       const keyName = getKeyName(e);
 
-      /* SPEED CONTROL - Shift + Arrow Up/Down */
-      if (e.shiftKey && e.code === "ArrowUp") {
+      if (e.shiftKey && code === "ArrowUp") {
         e.preventDefault();
         changeSpeed(0.1);
         return;
       }
 
-      if (e.shiftKey && e.code === "ArrowDown") {
+      if (e.shiftKey && code === "ArrowDown") {
         e.preventDefault();
         changeSpeed(-0.1);
         return;
       }
 
-      // Spasi → mulai mengetik (jika tidak sedang mengetik)
-      if (e.code === "Space" && !isTyping) {
+      if (code === "Space" && !isTyping) {
         e.preventDefault();
         setIsTyping(true);
         inputRef.current?.focus();
@@ -355,8 +239,7 @@ export default function LoginPage() {
         return;
       }
 
-      // ESC → keluar dari mode mengetik
-      if (e.key === "Escape") {
+      if (key === "Escape") {
         e.preventDefault();
         setIsTyping(false);
         inputRef.current?.blur();
@@ -369,20 +252,15 @@ export default function LoginPage() {
         return;
       }
 
-      // Enter → submit login (jika tidak sedang mengetik)
-      if (e.key === "Enter" && !isTyping) {
+      if (key === "Enter" && !isTyping) {
         e.preventDefault();
         speak("enter. Mengirim login.");
         document.querySelector("form")?.requestSubmit();
         return;
       }
-
-      // Ucapkan semua tombol khusus (yang bukan karakter tunggal)
-      // Karakter tunggal saat mengetik sudah dihandle oleh useEffect lain
-      if (e.key.length > 1) {
+      if (key.length > 1) {
         speakChar(keyName);
       } else if (!isTyping) {
-        // Jika tidak sedang mengetik, ucapkan karakter tunggal juga
         speakChar(keyName);
       }
     };
@@ -391,9 +269,6 @@ export default function LoginPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isTyping, registrationNumber]);
 
-  /* ==========================
-     LOGIN FUNCTION
-  ========================== */
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -453,7 +328,6 @@ export default function LoginPage() {
   return (
     <div className="bg-[#8db93f] min-h-[100dvh] flex items-start justify-center px-4 pb-8 pt-24 sm:px-6 sm:pt-28 lg:items-center lg:pt-32">
       <div className="w-full max-w-md bg-[#108607] rounded-2xl shadow-xl p-6 sm:p-8 lg:p-10">
-        {/* LOGO */}
         <div className="flex justify-center mb-6">
           <Image src="/logo/logould.png" width={120} height={120} alt="Logo" className="invert brightness-0" />
         </div>
@@ -462,7 +336,6 @@ export default function LoginPage() {
 
         <p className="text-white/90 text-center mb-8 px-4">Please sign in to your account by completing the necessary fields below</p>
 
-        {/* FORM LOGIN */}
         <form onSubmit={handleLogin} className="mt-4">
           <label className="text-white text-sm mb-2 block">Nomor Registrasi</label>
 

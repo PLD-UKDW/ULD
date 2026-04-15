@@ -95,9 +95,6 @@ export default function AdminDashboard() {
     <div className="p-8 space-y-10 text-black">
       <h1 className="text-3xl font-bold">Admin Dashboard</h1>
 
-      {/* ============================
-                SECTION: TEST LIST
-            ============================= */}
       <section>
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-2xl font-semibold">Daftar Test</h2>
@@ -147,9 +144,6 @@ export default function AdminDashboard() {
         </div>
       </section>
 
-      {/* ============================
-          SECTION: ATTEMPT LIST (Grouped by Test)
-      ============================= */}
       <section>
         <h2 className="text-2xl font-semibold mb-3">Daftar Attempt Peserta</h2>
 
@@ -157,7 +151,6 @@ export default function AdminDashboard() {
           <div className="border rounded-lg p-4 text-center text-gray-500">Belum ada attempt peserta.</div>
         ) : (
           <div className="space-y-6">
-            {/* Group attempts by test */}
             {Object.entries(
               attempts.reduce((acc: Record<string, any[]>, attempt: any) => {
                 const testId = attempt.test?.id || "unknown";

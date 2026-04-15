@@ -5,7 +5,6 @@ export const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:40
 const api = axios.create({ baseURL: API_BASE });
 
 api.interceptors.request.use((config) => {
-	// Keep legacy frontend calls working by mapping /admin/* to backend /api/admin/*.
 	if (typeof config.url === "string" && config.url.startsWith("/admin/")) {
 		config.url = `/api${config.url}`;
 	}

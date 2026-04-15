@@ -5,11 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 // import Map from './map';
 
-// disabilityData and statusData will be computed dynamically from backend data
-
-// Faculty options will be computed from backend data
-
-// Static list of provinces to mirror FE-adm options
 const PROVINSI_OPTIONS = [
   'Aceh',
   'Sumatera Utara',
@@ -107,7 +102,6 @@ export default function StatistikMahasiswaPage() {
   const isPausedRef = useRef(false);
   const isTtsActiveRef = useRef(false);
   
-  // Helper function for keyboard accessibility
   const handleKeyboardClick = useCallback((e: React.KeyboardEvent, callback: () => void) => {
     if (e.key === 'f' || e.key === 'F' || e.key === ' ') {
       e.preventDefault();
@@ -140,7 +134,6 @@ export default function StatistikMahasiswaPage() {
     setSelectedJenisAsalSekolah('all');
     setSelectedStatus('all');
     
-    // Focus on the first filter (Fakultas) after reset
     setTimeout(() => {
       const facultyFilter = document.querySelector('[aria-label*="Fakultas"]') as HTMLSelectElement;
       if (facultyFilter) {
@@ -152,7 +145,6 @@ export default function StatistikMahasiswaPage() {
     }, 0);
   }, []);
 
-  // Trigger navigation help only on initial page load
   useEffect(() => {
     const timer = setTimeout(() => {
       announceNavigationHelp();
@@ -175,7 +167,6 @@ export default function StatistikMahasiswaPage() {
     return () => window.removeEventListener('tts-say', handleLiveAnnouncement as EventListener);
   }, []);
   
-  // Get filter label by ID
   const getFilterLabel = useCallback((filterId: string): string => {
     const filterMap: Record<string, string> = {
       'faculty-filter': 'Fakultas',
@@ -192,7 +183,6 @@ export default function StatistikMahasiswaPage() {
     return filterMap[filterId] || filterId;
   }, []);
   
-  // List of filter IDs in order
   const FILTER_ORDER = [
     'faculty-filter',
     'disability-filter',
@@ -206,24 +196,19 @@ export default function StatistikMahasiswaPage() {
     'status-filter'
   ];
   
-  // Get filter position (first=0, last=9)
   const getFilterPosition = useCallback((filterId: string): number => {
     return FILTER_ORDER.indexOf(filterId);
   }, []);
   
-  // Placeholder for readMapDistribution - will be replaced with readMapDistributionEnhanced
   const readMapDistribution = useCallback(() => {
-    // This will be overridden after filteredData is computed
     window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: 'Loading...' } }));
   }, []);
   
-  // Handle select change with TTS for option announcement
   const handleFilterKeyDown = useCallback((e: React.KeyboardEvent<HTMLSelectElement>, filterId: string) => {
     const select = e.currentTarget as HTMLSelectElement;
     const filterLabel = getFilterLabel(filterId);
     
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      // Small timeout to let the browser update the selected option first
       setTimeout(() => {
         const currentOption = select.options[select.selectedIndex];
         const optionText = currentOption?.textContent || 'Tidak diketahui';
@@ -279,7 +264,6 @@ export default function StatistikMahasiswaPage() {
     }
   }, [normalizeStatus]);
 
-  // Handle select focus with TTS guidance
   const handleFilterFocus = useCallback((filterId: string, currentValue: string) => {
     setFocusedFilterId(filterId);
     const filterLabel = getFilterLabel(filterId);
@@ -290,7 +274,6 @@ export default function StatistikMahasiswaPage() {
     
     let focusText = `filter ${filterLabel}. Nilai saat ini: ${readableValue}. Tekan panah bawah atau atas untuk memilih opsi lainnya.`;
     
-    // Add navigation hint for non-first filters
     if (!isFirstFilter) {
       focusText += ` Tekan Shift Tab untuk ke filter sebelumnya.`;
     }
@@ -298,7 +281,6 @@ export default function StatistikMahasiswaPage() {
     window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: focusText } }));
   }, [getFilterLabel, getFilterPosition]);
 
-  // NOTE: handleFilterFocus will be overridden after filteredData is computed
 
   useEffect(() => {
     const fetchData = async () => {
@@ -319,7 +301,6 @@ export default function StatistikMahasiswaPage() {
     fetchData();
   }, []);
 
-  // Build dynamic filter options from raw data
   const facultyOptions = useMemo(() => {
     const set = new Set<string>();
     rawData.forEach((d) => { if (d.fakultas) set.add(d.fakultas); });
@@ -379,7 +360,6 @@ export default function StatistikMahasiswaPage() {
     return values.map(v => ({ value: v, label: prettyStatus(v) }));
   }, [rawData, prettyStatus]);
 
-  // IPK parsing and category helpers (handles number or string with comma)
   const parseIpk = (ipk: number | string | undefined): number | null => {
     if (ipk === undefined || ipk === null) return null;
     if (typeof ipk === 'number') return Number.isNaN(ipk) ? null : ipk;
@@ -435,7 +415,6 @@ export default function StatistikMahasiswaPage() {
 
   const totalDisabledStudents = filteredData.length;
 
-  // Build active filters description for TTS
   const getActiveFiltersDescription = (): string => {
     const activeFilters: string[] = [];
     if (selectedFaculty !== 'all') activeFilters.push(`Fakultas: ${selectedFaculty}`);
@@ -472,8 +451,6 @@ export default function StatistikMahasiswaPage() {
     return () => window.removeEventListener('filter-confirm', handleFilterConfirm as EventListener);
   }, [getActiveFiltersDescription, totalDisabledStudents]);
 
-  // Create an updated version of handleFilterFocus that works with filteredData
-  // Note: This uses a mutable ref-based approach to update the handler after filteredData is computed
   const handleFilterFocusImpl = useCallback((filterId: string, currentValue: string) => {
     setFocusedFilterId(filterId);
     const filterLabel = getFilterLabel(filterId);
@@ -484,12 +461,10 @@ export default function StatistikMahasiswaPage() {
     
     let focusText = `Anda berada di filter ${filterLabel}. Nilai saat ini: ${readableValue}. Tekan panah bawah atau atas untuk memilih opsi lainnya.`;
     
-    // Add navigation hints for non-first filters
     if (!isFirstFilter) {
       focusText += ` Tekan Shift Tab untuk ke filter sebelumnya.`;
     }
     
-    // Add comprehensive info for last filter
     if (isLastFilter) {
       const activeFiltersDesc = getActiveFiltersDescription();
       focusText += ` Jumlah mahasiswa disabilitas dengan filter ${activeFiltersDesc} adalah ${filteredData.length} mahasiswa.`;
@@ -500,9 +475,7 @@ export default function StatistikMahasiswaPage() {
     window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: focusText } }));
   }, [getFilterLabel, getFilterPosition, getActiveFiltersDescription, filteredData]);
 
-  // Function to read map distribution based on current filters
   const readMapDistributionEnhanced = useCallback(() => {
-    // Build map of provinces with student counts from filtered data
     const provinceMap = new Map<string, number>();
     
     filteredData.forEach((student: StudentRecord) => {
@@ -515,10 +488,9 @@ export default function StatistikMahasiswaPage() {
       return;
     }
     
-    // Build readable province list - sorted by count descending
     const provinceList: string[] = [];
     const sortedProvinces = Array.from(provinceMap.entries())
-      .sort((a, b) => b[1] - a[1]); // Sort by count descending
+      .sort((a, b) => b[1] - a[1]);
     
     sortedProvinces.forEach(([province, count]) => {
       const countText = count === 1 ? '1 mahasiswa' : `${count} mahasiswa`;
@@ -529,17 +501,14 @@ export default function StatistikMahasiswaPage() {
     window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: mapText } }));
   }, [filteredData]);
 
-  // Reset pause state when new TTS starts and track TTS lifecycle
   useEffect(() => {
     const handleTtsSay = (e: Event) => {
       isPausedRef.current = false;
       isTtsActiveRef.current = true;
     };
     
-    // Hook into speechSynthesis to track when TTS ends
     const originalSpeak = window.speechSynthesis.speak;
     window.speechSynthesis.speak = function(utterance: any) {
-      // Save original handlers before overwriting
       const originalOnEnd = utterance.onend;
       const originalOnCancel = utterance.oncancel;
       
@@ -560,7 +529,6 @@ export default function StatistikMahasiswaPage() {
     return () => window.removeEventListener('tts-say', handleTtsSay);
   }, []);
 
-  // Keyboard shortcuts for filters and statistics reading
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       // F5 to replay initial navigation help (without refreshing page)
@@ -570,7 +538,6 @@ export default function StatistikMahasiswaPage() {
         return;
       }
 
-      // Double Shift to announce full accessibility shortcuts summary
       if (e.key === 'Shift' && !e.repeat) {
         const now = Date.now();
         const timeSinceLastShift = now - lastShiftPressRef.current;
@@ -578,41 +545,34 @@ export default function StatistikMahasiswaPage() {
         if (timeSinceLastShift < 500) {
           // Double Shift detected
           e.preventDefault();
-          lastShiftPressRef.current = 0; // Reset
+          lastShiftPressRef.current = 0;
           announceShortcutsSummary();
           return;
         } else {
-          // First Shift press
           lastShiftPressRef.current = now;
           return;
         }
       }
 
-      // Double ESC to announce shortcut summary
       if (e.key === 'Escape') {
         const now = Date.now();
         const timeSinceLastEsc = now - lastEscPressRef.current;
         
         if (timeSinceLastEsc < 500) {
-          // Double ESC detected
           e.preventDefault();
-          lastEscPressRef.current = 0; // Reset
+          lastEscPressRef.current = 0;
           announceShortcutsSummary();
           return;
         } else {
-          // First ESC press
           lastEscPressRef.current = now;
-          // Let normal key echo happen below
         }
       }
 
-      // Double Ctrl to announce total with current filters
       if (e.key === 'Control') {
         const now = Date.now();
         const timeSinceLastCtrl = now - lastCtrlPressRef.current;
         
         if (timeSinceLastCtrl < 500) {
-          // Double Ctrl detected
           e.preventDefault();
           lastCtrlPressRef.current = 0; // Reset
           const activeFiltersDesc = getActiveFiltersDescription();
@@ -620,30 +580,25 @@ export default function StatistikMahasiswaPage() {
           window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: quickTotalText } }));
           return;
         } else {
-          // First Ctrl press
           lastCtrlPressRef.current = now;
-          return; // Don't process further or announce key echo for single Ctrl
+          return;
         }
       }
 
       let handledByShortcut = false;
 
-      // Ctrl+Z to reset all filters and accessibility features
       if (e.ctrlKey && !e.altKey && !e.metaKey && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         handledByShortcut = true;
         resetAllFilters();
-        // Also reset accessibility features
         window.dispatchEvent(new CustomEvent('a11y-reset'));
         return;
       }
 
-      // Filter shortcuts: Ctrl+1 through Ctrl+0
       if (e.ctrlKey && !e.altKey && !e.metaKey) {
         const key = e.key;
         const keyLower = key.toLowerCase();
 
-        // Check for chart shortcuts (K for Asal Sekolah, L for IPK)
         if ((keyLower === 'k' || keyLower === 'l') && !e.shiftKey) {
           e.preventDefault();
           handledByShortcut = true;
@@ -672,7 +627,6 @@ export default function StatistikMahasiswaPage() {
           return;
         }
         
-        // Check if it's a number key for filter shortcuts
         const isNumber = /^[0-9]$/.test(key);
         
         if (isNumber && !e.shiftKey) {
@@ -768,11 +722,9 @@ export default function StatistikMahasiswaPage() {
         }
       }
 
-      // Space to pause/resume TTS
       if (e.key === ' ' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
         const target = e.target as HTMLElement | null;
         const targetTag = target?.tagName;
-        // Don't intercept space in input fields
         if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || target?.isContentEditable) {
           return;
         }
@@ -782,7 +734,6 @@ export default function StatistikMahasiswaPage() {
           handledByShortcut = true;
           
           if (isPausedRef.current) {
-            // Resume paused audio
             try {
               window.speechSynthesis.resume();
             } catch (err) {
@@ -813,7 +764,6 @@ export default function StatistikMahasiswaPage() {
         return;
       }
       
-      // Don't announce 'Enter' or 'F' if it's being handled by a chart element's onKeyDown
       const chartElement = target?.closest('div[role="button"][id*="chart"]');
       if (chartElement && (e.key === 'Enter' || e.key === 'f' || e.key === 'F')) {
         return;
@@ -827,7 +777,6 @@ export default function StatistikMahasiswaPage() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [readMapDistributionEnhanced, getActiveFiltersDescription, totalDisabledStudents, formatKeyForTTS, announceNavigationHelp, announceShortcutsSummary, resetAllFilters]);
 
-  // Data for Line Chart (Jumlah Mahasiswa Disabilitas per Angkatan)
   const studentsPerAngkatan = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
     const angkatan = String(student.angkatan);
     acc[angkatan] = (acc[angkatan] || 0) + 1;
@@ -838,20 +787,17 @@ export default function StatistikMahasiswaPage() {
     jumlah: studentsPerAngkatan[angkatan],
   }));
 
-  // Helper function to format asal sekolah name for TTS reading
   const formatAsalSekolahForTts = (name: string): string => {
     if (name === 'NonSLB') return 'Non S L B';
     if (name === 'SLB') return 'S L B';
     return name;
   };
 
-  // Helper function to format IPK range for TTS reading
   const formatIpkForTts = (name: string): string => {
     if (name === '\u2265 3.5' || name === '≥ 3.5') return 'lebih dari sama dengan tiga koma lima';
     return name;
   };
 
-  // Data for Jenis Asal Sekolah Pie Chart
   const studentsPerAsalSekolah = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
     const asal = normalizeAsalSekolah(student.asal_sekolah);
     if (!asal) return acc;
@@ -864,9 +810,8 @@ export default function StatistikMahasiswaPage() {
       value: studentsPerAsalSekolah[asalSekolah] || 0,
       label: `${asalSekolah}: ${studentsPerAsalSekolah[asalSekolah] || 0}`,
     }))
-    .filter(item => item.value > 0); // Only show items with value > 0
+    .filter(item => item.value > 0);
 
-  // Data for Bar Chart (Jumlah Mahasiswa Disabilitas per Fakultas)
   const studentsPerFakultas = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
     const f = student.fakultas ?? 'Tidak Diketahui';
     acc[f] = (acc[f] || 0) + 1;
@@ -877,7 +822,6 @@ export default function StatistikMahasiswaPage() {
     jumlah: studentsPerFakultas[fakultas],
   }));
 
-  // Data for Jenis Kelamin Pie Chart
   const studentsPerJenisKelamin = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
     const g = student.gender ?? 'Tidak Diketahui';
     acc[g] = (acc[g] || 0) + 1;
@@ -889,7 +833,6 @@ export default function StatistikMahasiswaPage() {
     label: `${gender === 'L' ? 'Laki-laki' : gender === 'P' ? 'Perempuan' : gender}: ${studentsPerJenisKelamin[gender]}`,
   }));
 
-  // Data for Jenjang Studi Pie Chart
   const studentsPerJenjang = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
     const jj = student.jenjang ?? 'Tidak Diketahui';
     acc[jj] = (acc[jj] || 0) + 1;
@@ -900,7 +843,6 @@ export default function StatistikMahasiswaPage() {
     value: studentsPerJenjang[jenjang],
     label: `${jenjang}: ${studentsPerJenjang[jenjang]}`,
   }));
-    // Data for IPK Distribution Pie Chart
     const studentsPerIpkCategory = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
       const bucket = computeIpkBucket(student.ipk);
       if (!bucket) return acc;
@@ -912,7 +854,6 @@ export default function StatistikMahasiswaPage() {
       value: studentsPerIpkCategory[category],
       label: `${category}: ${studentsPerIpkCategory[category]}`,
     }));
-    // Build chart datasets for disability and status
     const studentsPerDisability = filteredData.reduce((acc: { [key: string]: number }, student: StudentRecord) => {
       const d = student.jenisDisabilitas || 'Tidak Tersedia';
       acc[d] = (acc[d] || 0) + 1;
@@ -940,7 +881,6 @@ export default function StatistikMahasiswaPage() {
       formatter: (item: { name: string; value: number }) => string
     ) => data.map(formatter).join(', ');
 
-    // Helper: Convert number to Indonesian text (e.g., 2018 → "dua ribu delapan belas")
     const numberToIndonesian = (num: number): string => {
       const ones = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan'];
       const teens = ['sepuluh', 'sebelas', 'dua belas', 'tiga belas', 'empat belas', 'lima belas', 'enam belas', 'tujuh belas', 'delapan belas', 'sembilan belas'];
@@ -957,19 +897,16 @@ export default function StatistikMahasiswaPage() {
       return num.toString();
     };
 
-    // Build TTS message for angkatan chart
     const angkatanTtsMessage = angkatanChartData.map(item => 
       `Ada ${item.jumlah} mahasiswa disabilitas angkatan ${numberToIndonesian(Number(item.angkatan))}`
     ).join(', ');
 
-    // Pagination for angkatan chart (10 items per page)
     const ITEMS_PER_PAGE = 10;
     const totalPages = Math.ceil(angkatanChartData.length / ITEMS_PER_PAGE);
     const startIndex = angkatanPage * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
     const paginatedAngkatanData = angkatanChartData.slice(startIndex, endIndex);
 
-    // Build TTS message for fakultas chart
     const fakultasTtsMessage = fakultasChartData.map(item => 
       `Ada ${item.jumlah} mahasiswa disabilitas di fakultas ${item.fakultas}`
     ).join(', ');
@@ -999,7 +936,6 @@ export default function StatistikMahasiswaPage() {
       (item) => `Terdapat ${item.value} mahasiswa dengan IPK ${formatIpkForTts(item.name)}`
     );
 
-    // Map data for MapChart (provide required fields with placeholders where needed)
     const mapData = filteredData.map((m: any) => ({
       id: m.id || 0,
       nama: '',
@@ -1039,7 +975,6 @@ export default function StatistikMahasiswaPage() {
           <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
             {liveAnnouncement}
           </div>
-          {/* Shortcuts Guide Button */}
           <div className="fixed bottom-20 right-4 z-40">
             <button
               onClick={() => setShowShortcutsGuide(!showShortcutsGuide)}
@@ -1051,7 +986,6 @@ export default function StatistikMahasiswaPage() {
             </button>
           </div>
           
-          {/* Shortcuts Guide Modal */}
           {showShortcutsGuide && (
             <div role="dialog" aria-modal="true" aria-labelledby="shortcut-guide-title" className="mb-6 bg-white rounded-lg shadow-lg p-6 border-2 border-indigo-200">
               <div className="flex justify-between items-center mb-4">
@@ -1066,7 +1000,6 @@ export default function StatistikMahasiswaPage() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Filter Shortcuts */}
                 <div>
                   <h3 className="text-lg font-bold text-indigo-600 mb-3">Shortcut Filter</h3>
                   <div className="space-y-2 text-sm">
@@ -1085,7 +1018,6 @@ export default function StatistikMahasiswaPage() {
                   </div>
                 </div>
                 
-                {/* Map and Statistics Reading Shortcuts */}
                 <div>
                   <h3 className="text-lg font-bold text-purple-600 mb-3">Shortcut Peta & Statistik</h3>
                   <div className="space-y-2 text-sm">
@@ -1122,7 +1054,6 @@ export default function StatistikMahasiswaPage() {
           {error && (
             <div className="mb-4 rounded-md border border-red-200 bg-red-50 text-red-700 p-3 text-sm">{error}</div>
           )}
-          {/* Filters Section */}
             <section aria-labelledby="filter-section-title" className="mb-12 bg-white shadow-md rounded-xl p-4 border border-gray-200">
               <h2 id="filter-section-title" className="text-xl font-bold text-gray-800 mb-4">Filter Data</h2>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -1289,7 +1220,6 @@ export default function StatistikMahasiswaPage() {
                   </div>
               </div>
               </section>
-          {/* Total Active Students Card */}
               <section aria-labelledby="ringkasan-statistik-title" className="mb-12">
             <h2 id="ringkasan-statistik-title" className="sr-only">Ringkasan Statistik</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1319,8 +1249,6 @@ export default function StatistikMahasiswaPage() {
               </div>
             </div>
           </section>
-          {/* <Map /> */}
-          {/* Map Section */}
           <section aria-labelledby="map-section-title" className="mb-12 bg-white shadow-lg rounded-xl p-6 border border-gray-200">
               <h2 id="map-section-title" className="text-2xl font-bold text-center text-gray-800 mb-6">
                   Peta Sebaran Mahasiswa
@@ -1332,7 +1260,6 @@ export default function StatistikMahasiswaPage() {
           </section>
           <section aria-labelledby="charts-section-title" className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             <h2 id="charts-section-title" className="sr-only">Grafik Statistik Mahasiswa Disabilitas</h2>
-            {/* Line Chart: Jumlah Mahasiswa Disabilitas per Angkatan */}
             <div 
               id="angkatan-chart"
               className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" 
@@ -1343,7 +1270,6 @@ export default function StatistikMahasiswaPage() {
               aria-label="Grafik jumlah mahasiswa disabilitas per angkatan, tekan F untuk mendengarkan deskripsi"
               onClick={(e) => {
                 const target = e.target as HTMLElement;
-                // Don't trigger if clicking on SVG or chart elements
                 if (!target.closest('svg') && !target.closest('.recharts-wrapper')) {
                   window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: angkatanTtsMessage } }));
                 }
@@ -1367,12 +1293,12 @@ export default function StatistikMahasiswaPage() {
                     <YAxis allowDecimals={false} />
                     <Tooltip />
                     <Legend />
-                    <Line 
-                      type="monotone" 
-                      dataKey="jumlah" 
+                    <Line
+                      type="monotone"
+                      dataKey="jumlah"
                       stroke="#403CBE"
                       name="Jumlah"
-                      activeDot={{ 
+                      activeDot={{
                         r: 8,
                         onClick: (e: any, payload: any) => {
                           if (payload && payload.payload) {
@@ -1383,12 +1309,11 @@ export default function StatistikMahasiswaPage() {
                             window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: message } }));
                           }
                         }
-                      }} 
+                      }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              {/* Pagination Controls */}
               <div className="flex items-center justify-center gap-4 mt-4">
                 <button
                   onClick={() => setAngkatanPage(Math.max(0, angkatanPage - 1))}
@@ -1408,7 +1333,6 @@ export default function StatistikMahasiswaPage() {
                   Selanjutnya →
                 </button>
               </div>
-              {/* Data Table for Screen Readers */}
               <table className="sr-only">
                 <caption>Tabel Data: Jumlah Mahasiswa Disabilitas per Angkatan</caption>
                 <thead>
@@ -1427,8 +1351,7 @@ export default function StatistikMahasiswaPage() {
                 </tbody>
               </table>
             </div>
-            {/* Bar Chart: Jumlah Mahasiswa Disabilitas per Fakultas */}
-            <div 
+            <div
               id="fakultas-chart"
               className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" 
               role="button"
@@ -1438,7 +1361,6 @@ export default function StatistikMahasiswaPage() {
               aria-label="Grafik statistik per fakultas, tekan F untuk mendengarkan deskripsi"
               onClick={(e) => {
                 const target = e.target as HTMLElement;
-                // Don't trigger if clicking on SVG or chart elements
                 if (!target.closest('svg') && !target.closest('.recharts-wrapper')) {
                   window.dispatchEvent(new CustomEvent('tts-say', { detail: { text: fakultasTtsMessage } }));
                 }
@@ -1466,8 +1388,8 @@ export default function StatistikMahasiswaPage() {
                     <YAxis allowDecimals={false} />
                     <Tooltip />
                     <Legend verticalAlign="bottom" align="right" wrapperStyle={{ position: 'absolute', bottom: 8, right: 8 }} />
-                    <Bar 
-                      dataKey="jumlah" 
+                    <Bar
+                      dataKey="jumlah"
                       fill="#275D3C"
                       name="Jumlah"
                       onClick={(data: any) => {
@@ -1482,7 +1404,6 @@ export default function StatistikMahasiswaPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              {/* Data Table for Screen Readers */}
               <table className="sr-only">
                 <caption>Tabel Data: Jumlah Mahasiswa Disabilitas per Fakultas</caption>
                 <thead>
@@ -1501,7 +1422,6 @@ export default function StatistikMahasiswaPage() {
                 </tbody>
               </table>
             </div>
-            {/* Ragam Disabilitas Section */}
             <div
               id="disabilitas-chart"
               className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -1552,7 +1472,6 @@ export default function StatistikMahasiswaPage() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              {/* Data Table for Screen Readers */}
               <table className="sr-only">
                 <caption>Tabel Data: Ragam Disabilitas</caption>
                 <thead>
@@ -1571,7 +1490,6 @@ export default function StatistikMahasiswaPage() {
                 </tbody>
               </table>
             </div>
-            {/* Status Mahasiswa Section */}
             <div
               id="status-chart"
               className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -1622,7 +1540,6 @@ export default function StatistikMahasiswaPage() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              {/* Data Table for Screen Readers */}
               <table className="sr-only">
                 <caption>Tabel Data: Status Mahasiswa</caption>
                 <thead>
@@ -1641,7 +1558,6 @@ export default function StatistikMahasiswaPage() {
                 </tbody>
               </table>
             </div>
-            {/* Jenis Kelamin Pie Chart */}
             <div
               id="jenis-kelamin-chart"
               className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -1692,7 +1608,6 @@ export default function StatistikMahasiswaPage() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              {/* Data Table for Screen Readers */}
               <table className="sr-only">
                 <caption>Tabel Data: Jenis Kelamin Mahasiswa</caption>
                 <thead>
@@ -1711,7 +1626,6 @@ export default function StatistikMahasiswaPage() {
                 </tbody>
               </table>
             </div>
-            {/* Jenjang Studi Pie Chart */}
             <div
               id="jenjang-chart"
               className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -1762,7 +1676,6 @@ export default function StatistikMahasiswaPage() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              {/* Data Table for Screen Readers */}
               <table className="sr-only">
                 <caption>Tabel Data: Jenjang Studi Mahasiswa</caption>
                 <thead>
@@ -1781,7 +1694,6 @@ export default function StatistikMahasiswaPage() {
                 </tbody>
               </table>
             </div>
-            {/* Jenis Asal Sekolah Pie Chart */}
             <div
               id="asal-sekolah-chart"
               className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -1832,7 +1744,6 @@ export default function StatistikMahasiswaPage() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              {/* Data Table for Screen Readers */}
               <table className="sr-only">
                 <caption>Tabel Data: Jenis Asal Sekolah Mahasiswa</caption>
                 <thead>
@@ -1851,7 +1762,6 @@ export default function StatistikMahasiswaPage() {
                 </tbody>
               </table>
             </div>
-            {/* IPK Distribution Pie Chart */}
             <div
               id="ipk-chart"
               className="bg-white shadow-lg rounded-xl p-6 border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -1902,7 +1812,6 @@ export default function StatistikMahasiswaPage() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              {/* Data Table for Screen Readers */}
               <table className="sr-only">
                 <caption>Tabel Data: Distribusi IPK Mahasiswa</caption>
                 <thead>

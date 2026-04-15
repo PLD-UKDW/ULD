@@ -94,9 +94,6 @@ export default function TestResultPage() {
     };
   }, [getPreferredVoice, useTTS]);
 
-  /* =====================================================
-     🔊 SPEECH ENGINE
-  ===================================================== */
   const speakQueue = (texts: string[], rate?: number) => {
     if (!useTTS) return;
     if (!("speechSynthesis" in window)) return;
@@ -110,9 +107,6 @@ export default function TestResultPage() {
     });
   };
 
-  /* =====================================================
-     🔊 SPEECH QUEUE WITH PROMISE (WAIT UNTIL FINISH)
-  ===================================================== */
   const speakQueueAndWait = (texts: string[], rate?: number): Promise<void> => {
     return new Promise((resolve) => {
       if (!useTTS) {
@@ -136,7 +130,6 @@ export default function TestResultPage() {
       texts.forEach((text, index) => {
         const u = createUtterance(text, currentRate);
 
-        // Resolve when the last utterance ends
         if (index === texts.length - 1) {
           u.onend = () => resolve();
           u.onerror = () => resolve();
@@ -147,7 +140,6 @@ export default function TestResultPage() {
     });
   };
 
-  // Fetch result data
   const fetchResult = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token || !attemptId) return;
@@ -162,7 +154,6 @@ export default function TestResultPage() {
     }
   }, [id, attemptId]);
 
-  // Initial fetch + test info
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -176,7 +167,6 @@ export default function TestResultPage() {
       .then(setTest);
   }, [id, attemptId, fetchResult]);
 
-  // Auto-refresh setiap 10 detik untuk live update skor dari admin
   useEffect(() => {
     const interval = setInterval(() => {
       fetchResult();
@@ -185,15 +175,10 @@ export default function TestResultPage() {
     return () => clearInterval(interval);
   }, [fetchResult]);
 
-  /* =====================================================
-     TTS: Bacakan hasil saat data tersedia
-  ===================================================== */
   useEffect(() => {
     if (!useTTS || !attempt || !test || hasSpoken) return;
 
-    // Delay untuk memastikan TTS halaman sebelumnya sudah selesai
     const timeout = setTimeout(() => {
-      // Pastikan tidak ada TTS yang berjalan dari halaman sebelumnya
       window.speechSynthesis.cancel();
 
       const texts: string[] = [];
@@ -224,7 +209,6 @@ export default function TestResultPage() {
     return () => clearTimeout(timeout);
   }, [attempt, test, hasSpoken, speechRate, useTTS]);
 
-  // Fungsi untuk mengubah kecepatan
   const changeSpeed = useCallback(
     (delta: number) => {
       if (!useTTS) return;
@@ -235,7 +219,6 @@ export default function TestResultPage() {
         return newRate;
       });
 
-      // Feedback audio
       window.speechSynthesis.cancel();
       const label = getSpeedLabel(newRate);
       speakQueue([`Kecepatan ${label}`], newRate);
@@ -243,7 +226,6 @@ export default function TestResultPage() {
     [setSpeechRate, speakQueue, speechRate, useTTS],
   );
 
-  // Fungsi untuk membacakan ulang hasil
   const replayResult = useCallback(() => {
     if (!useTTS) return;
     if (!attempt || !test) return;
@@ -271,7 +253,6 @@ export default function TestResultPage() {
     speakQueue(texts);
   }, [attempt, test, useTTS]);
 
-  // Fungsi untuk membacakan ulang instruksi
   const replayInstructions = useCallback(() => {
     if (!useTTS) return;
 
@@ -283,12 +264,8 @@ export default function TestResultPage() {
     speakQueue(texts);
   }, [useTTS]);
 
-  /* =====================================================
-     KEYBOARD NAVIGATION
-  ===================================================== */
   useEffect(() => {
     const handler = async (e: KeyboardEvent) => {
-      // Abaikan jika sedang mengetik di input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       switch (e.code) {
@@ -309,11 +286,9 @@ export default function TestResultPage() {
           e.preventDefault();
           const now = Date.now();
           if (now - leftArrowPressRef.current < 300) {
-            // Double press detected
             replayInstructions();
             leftArrowPressRef.current = 0;
           } else {
-            // First press
             leftArrowPressRef.current = now;
           }
           break;
@@ -350,7 +325,6 @@ export default function TestResultPage() {
 
   if (!attempt || !test) return <p className="min-h-[100dvh] px-4 pt-24 text-2xl sm:px-6 sm:pt-28 lg:px-8 lg:pt-32">Memuat...</p>;
 
-  // Cek apakah masih menunggu penilaian essay
   const isPending = attempt.finalScore === null || attempt.passStatus === null;
 
   return (
@@ -398,9 +372,6 @@ export default function TestResultPage() {
           Kembali ke Dashboard
         </a>
 
-        {/* =====================================================
-          FLOATING SPEED CONTROL - KONSISTEN DENGAN HALAMAN LAIN
-      ===================================================== */}
         {useTTS && (
           <div className="fixed bottom-4 right-4 z-40 flex flex-col items-center gap-3 rounded-xl border bg-white p-4 shadow-xl sm:bottom-6 sm:right-6">
             <p className="text-sm font-semibold text-black">Kecepatan Suara</p>
