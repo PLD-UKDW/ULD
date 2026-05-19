@@ -212,12 +212,7 @@ export function NavigationMenuDemo() {
         <div className="hidden min-[975px]:flex items-center gap-4">
           {loggedIn ? (
             <>
-              <Link
-                href={dashboardHref}
-                aria-label="Kembali ke dashboard"
-                title="Dashboard"
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#108607] font-bold shadow hover:bg-[#e8f5e8] transition"
-              >
+              <Link href={dashboardHref} aria-label="Kembali ke dashboard" title="Dashboard" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#108607] font-bold shadow hover:bg-[#e8f5e8] transition">
                 {profileInitial}
               </Link>
               <button onClick={handleLogout} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-700 transition" type="button">

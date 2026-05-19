@@ -254,9 +254,9 @@
 // File: src/app/admin/scoring/page.tsx
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
+import { useSearchParams } from "next/navigation";
 
 type Attempt = {
   id: number;
@@ -282,7 +282,7 @@ type Question = {
   autoScore?: number;
 };
 
-export default function AdminScoringPage() {
+function AdminScoringContent() {
   const [token, setToken] = useState<string | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -653,3 +653,10 @@ export default function AdminScoringPage() {
   );
 }
 
+export default function AdminScoringPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Memuat...</div>}>
+      <AdminScoringContent />
+    </Suspense>
+  );
+}
